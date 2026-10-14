@@ -3,6 +3,7 @@
 ## Goals 
 - [ ] Self-hosted
 - [ ] Reference-counting garbage collector
+- [ ] Same-thread assync functions
 
 ## TODO
 - [x] Scope checking and stuff in parser

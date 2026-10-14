@@ -31,7 +31,7 @@ class FunctionSignature:
     args: dict[str, types.Value]
     
 @dataclass
-class typesignature:
+class ValueSignature:
     name: str
     real_name: str
     mutable: bool
@@ -45,14 +45,13 @@ class MemberSignature:
     typ: type[types.Integer64] | type[types.String] | type[types.Void]
     member_idx: int
 
-
 @dataclass
 class Scope:
     parent: Optional[Scope]
     classes: dict[str, ClassSignature]
     structs: dict[str, StructSignature]
-    functions: dict[str, FunctionSignature]
-    variables: dict[str, typesignature]
+    functions: dict[str, list[FunctionSignature]]
+    values: dict[str, ValueSignature]
 
     @staticmethod
     def root() -> Scope:
@@ -61,7 +60,7 @@ class Scope:
             classes = {},
             structs = {},
             functions = {},
-            variables = {},
+            values = {},
         )
 
     def child(self) -> Scope:
@@ -70,18 +69,18 @@ class Scope:
             classes = self.classes,
             structs = self.structs,
             functions = self.functions,
-            variables = {},
+            values = {},
         )
 
-    def resolve_variable(self, name: str) -> Optional[typesignature]:
+    def resolve_variable(self, name: str) -> Optional[ValueSignature]:
         current: Optional[Scope] = self
         while current is not None:
-            if name in current.variables:
-                return current.variables[name]
+            if name in current.values:
+                return current.values[name]
             current = current.parent
         return None
 
-    def resolve_function(self, scope_checker: ScopeChecker, name: str, args: list[types.Expression]) -> list[Optional[typesignature]]:
+    def resolve_function(self, scope_checker: ScopeChecker, name: str, args: list[types.Value]) -> list[Optional[FunctionSignature]]:
         current: Optional[Scope] = self
         while current is not None:
             if name in current.functions:
@@ -188,6 +187,8 @@ class ScopeChecker:
                             typ = method.typ,
                             args = method.args,
                         )
+                        
+                        if 
 
                     self.global_scope.classes[name] = ClassSignature(
                         name = name,
@@ -196,18 +197,18 @@ class ScopeChecker:
                         methods = method_table,
                     )
 
-                case types.FunctionDeclaration(name=name, real_name=real_name, typ=typ, args=args):
-                    if name in self.global_scope.functions:
-                        self._error(f"Function '{name}' is already declared")
-                        continue
+                case types.FunctionDeclaration(name, typ, args, _, real_name):
+                    existing = self.global_scope.resolve_function(self, name, list(args.values()))
+                    if not existing is None:
+                        self._error(f"Function '{name}' is already defined with following signature '{existing}'")
 
-                    self.global_scope.functions[name] = FunctionSignature(
+                    self.global_scope.functions[name].append(FunctionSignature(
                         name = name,
                         real_name = real_name,
                         static = True,
                         typ = typ,
                         args = args,
-                    )
+                    ))
 
                 case _:
                     self._error(f"Unsupported top-level node while collecting symbols: {type(top_level)}")
@@ -216,10 +217,10 @@ class ScopeChecker:
         function_scope = enclosing_scope.child()
 
         for arg_name, arg_type in fn.args.items():
-            if arg_name in function_scope.variables:
+            if arg_name in function_scope.values:
                 self._error(f"Duplicate argument '{arg_name}' in function '{fn.name}'")
                 continue
-            function_scope.variables[arg_name] = typesignature(
+            function_scope.values[arg_name] = ValueSignature(
                 name = arg_name,
                 real_name = arg_name,
                 mutable = False,
@@ -231,7 +232,7 @@ class ScopeChecker:
         for child in fn.body:
             match child:
                 case types.ValueDeclaration():
-                    if child.name in function_scope.variables:
+                    if child.name in function_scope.values:
                         self._error(f"Variable '{child.name}' is already defined in function '{fn.name}'")
                         continue
 
@@ -242,7 +243,7 @@ class ScopeChecker:
                             f"expected {self._type_name(child.typ)}, got {self._type_name(expression_type)}"
                         )
 
-                    function_scope.variables[child.name] = typesignature(
+                    function_scope.values[child.name] = ValueSignature(
                         name = child.name,
                         real_name = child.real_name,
                         mutable = child.mutable,
@@ -302,7 +303,10 @@ class ScopeChecker:
                     return None
                 return signature.typ
             case types.PrimaryExpression(types.FunctionCall(name, args)):
-                signature = active_scope.resolve_function(self, name, args)
+                arg_types = active_scope.expr_args_to_arg_types(self, args)
+                if arg_types is None:
+                    self._error(f"Could not get argument types from function call")
+                signature = active_scope.resolve_function(self, name, arg_types)
                 if signature is None:
                     self._error(f"Unknown function '{name}' with given argument signature")
                     return None
