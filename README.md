@@ -15,7 +15,7 @@
   - With no * or & before type it will be "dynamic", the compiler figures out if it's the pointer or the value that is being used
   - explicit value with * or explicit pointer with &. You can also use & and * on a "dynamic" type to get both, "dynamic" types are both at the same time, but in reality they are probably the pointer and then you know both 
 
-## Planning code + ideas + sketch, ... etc
+## Planning code + ideas + sketch, ... etc ([see also](https://github.com/zelkel-lang/zelkel-syntax-demo))
 ```kotlin
 class Parser {
   val tokens: Arr<Token>
