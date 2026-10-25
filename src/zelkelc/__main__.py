@@ -16,8 +16,9 @@ class String {
 }
 
 fn main() -> void {
-    val a: i64 = 1
-    val test: i64 = a + 1
+    val a: i64 = 10
+    val b: i64 = 32
+    val test: i64 = a + b * 3
     return
 }
 """

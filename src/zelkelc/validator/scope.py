@@ -329,6 +329,7 @@ class ScopeChecker:
                     return None
                 
                 expr.value.irname = signature.irname
+                expr.value.typ = signature.typ
                 return signature.typ
             case types.PrimaryExpression(types.FunctionCall(name, args)):
                 arg_types = active_scope.expr_args_to_arg_types(self, args)

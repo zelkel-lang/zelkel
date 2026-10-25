@@ -313,7 +313,7 @@ class Parser:
                     self.expect(token.RParen())
                     return types.PrimaryExpression(types.FunctionCall(t.value, args, None), types.FunctionCall)
                 else:
-                    return types.PrimaryExpression(types.VariableRef(t.value, None), types.VariableRef)
+                    return types.PrimaryExpression(types.VariableRef(t.value, None, None), types.VariableRef)
 
             case token.Integer():
                 self.cursor += 1

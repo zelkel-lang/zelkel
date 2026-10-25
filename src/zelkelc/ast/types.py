@@ -96,6 +96,7 @@ class Void:
 class VariableRef:
     name: str
     irname: str
+    typ: Value
     
     def to_llvm() -> str:
         print("Cannot convert Variable to llvm ir")

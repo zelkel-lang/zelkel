@@ -114,10 +114,17 @@ class Codegen:
                         exit(1)
                         
                 match node.left.typ:
-                   case types.Integer64:
+                    case types.Integer64:
                         ir += f"\n%{self.temp_counter} = {op} i64 %{left_irname}, %{right_irname}"
                         self.temp_counter += 1
-                   case _:
+                    case types.VariableRef:
+                        match node.left.value.typ:
+                            case types.Integer64:
+                                ir += f"\n%{self.temp_counter} = {op} i64 %{left_irname}, %{right_irname}"
+                                self.temp_counter += 1
+                            case _:
+                                print(f"gen_expression() for BinaryExpression left operand variable type '{node.left.value.typ}' is unimplemented")
+                    case _:
                        print(f"gen_expression() for BinaryExpression for {node.left.typ}")
                        exit(1)
             case types.UnaryExpression:
