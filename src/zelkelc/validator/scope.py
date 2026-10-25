@@ -12,20 +12,20 @@ class SemanticError:
 @dataclass
 class StructSignature:
     name: str
-    real_name: str
+    irname: str
     members: dict[str, MemberSignature]
 
 @dataclass
 class ClassSignature:
     name: str
-    real_name: str
+    irname: str
     members: dict[str, MemberSignature]
-    methods: dict[str, FunctionSignature]
+    methods: dict[str, list[FunctionSignature]]
 
 @dataclass 
 class FunctionSignature:
     name: str
-    real_name: str
+    irname: str
     static: bool
     typ: types.Value
     args: dict[str, types.Value]
@@ -33,14 +33,14 @@ class FunctionSignature:
 @dataclass
 class ValueSignature:
     name: str
-    real_name: str
+    irname: str
     mutable: bool
     typ: type[types.Integer64] | type[types.String] | type[types.Void]
     
 @dataclass
 class MemberSignature:
     name: str
-    real_name: str
+    irname: str
     mutable: bool
     typ: type[types.Integer64] | type[types.String] | type[types.Void]
     member_idx: int
@@ -57,19 +57,19 @@ class Scope:
     def root() -> Scope:
         return Scope(
             parent=None,
-            classes = {},
-            structs = {},
-            functions = {},
-            values = {},
+            classes={},
+            structs={},
+            functions={},
+            values={},
         )
 
     def child(self) -> Scope:
         return Scope(
-            parent = self,
-            classes = self.classes,
-            structs = self.structs,
-            functions = self.functions,
-            values = {},
+            parent=self,
+            classes=self.classes,
+            structs=self.structs,
+            functions=self.functions,
+            values={},
         )
 
     def resolve_variable(self, name: str) -> Optional[ValueSignature]:
@@ -80,17 +80,27 @@ class Scope:
             current = current.parent
         return None
 
-    def resolve_function(self, scope_checker: ScopeChecker, name: str, args: list[types.Value]) -> list[Optional[FunctionSignature]]:
+    def resolve_function(self, scope_checker: ScopeChecker, name: str, args: list[types.Expression]) -> Optional[FunctionSignature]:
         current: Optional[Scope] = self
         while current is not None:
-            if name in current.functions:
-                func = current.functions[name]
-                arg_types = self.expr_args_to_arg_types(scope_checker, args)
+            overloads = current.functions.get(name)
+            if overloads:
+                arg_types = current.expr_args_to_arg_types(scope_checker, args)
                 if arg_types is None:
                     return None
-                
-                if list(func.args.values()) == arg_types:
-                    return func
+
+                return current.resolve_function_by_types(name, arg_types)
+            current = current.parent
+        return None
+
+    def resolve_function_by_types(self, name: str, arg_types: list[types.Value]) -> Optional[FunctionSignature]:
+        current: Optional[Scope] = self
+        while current is not None:
+            overloads = current.functions.get(name)
+            if overloads:
+                for candidate in overloads:
+                    if list(candidate.args.values()) == arg_types:
+                        return candidate
             current = current.parent
         return None
 
@@ -100,10 +110,15 @@ class Scope:
             typ = scope_checker._infer_expression_type(arg, self)
             if typ is None:
                 return None
-            
+
             arg_types.append(typ)
-        
+
         return arg_types
+
+    def _ensure_function_overloads(self, name: str) -> list[FunctionSignature]:
+        if name not in self.functions:
+            self.functions[name] = []
+        return self.functions[name]
 
 class ScopeChecker:
     global_scope: Scope
@@ -133,7 +148,7 @@ class ScopeChecker:
     def _collect_globals(self, tree: list[types.Node]) -> None:
         for top_level in tree:
             match top_level:
-                case types.StructDeclaration(name=name, real_name=real_name, members=members):
+                case types.StructDeclaration(name=name, irname=irname, members=members):
                     if name in self.global_scope.structs:
                         self._error(f"Struct '{name}' is already declared")
                         continue
@@ -145,7 +160,7 @@ class ScopeChecker:
                             continue
                         member_table[member.name] = MemberSignature(
                             name = member.name,
-                            real_name = f"{real_name}.m_{member.name}",
+                            irname = f"{irname}.m_{member.name}",
                             mutable = member.mutable,
                             typ = member.typ,
                             member_idx = member.real_idx,
@@ -153,11 +168,11 @@ class ScopeChecker:
 
                     self.global_scope.structs[name] = StructSignature(
                         name=name,
-                        real_name=real_name,
+                        irname=irname,
                         members=member_table,
                     )
 
-                case types.ClassDeclaration(name=name, real_name=real_name, members=members, methods=methods):
+                case types.ClassDeclaration(name=name, irname=irname, members=members, methods=methods):
                     if name in self.global_scope.classes:
                         self._error(f"Class '{name}' is already declared")
                         continue
@@ -169,42 +184,52 @@ class ScopeChecker:
                             continue
                         member_table[member.name] = MemberSignature(
                             name = member.name,
-                            real_name = f"{real_name}.m_{member.name}",
+                            irname = f"{irname}.m_{member.name}",
                             mutable = member.mutable,
                             typ = member.typ,
                             member_idx = idx,
                         )
 
-                    method_table: dict[str, FunctionSignature] = {}
+                    method_table: dict[str, list[FunctionSignature]] = {}
                     for method in methods:
-                        if method.name in method_table:
-                            self._error(f"Duplicate method '{method.name}' in class '{name}'")
-                            continue
-                        method_table[method.name] = FunctionSignature(
+                        signature = FunctionSignature(
                             name = method.name,
-                            real_name = method.real_name,
+                            irname = method.irname,
                             static = False,
                             typ = method.typ,
                             args = method.args,
                         )
-                        
-                        if 
 
+                        overloads = method_table.setdefault(method.name, [])
+                        has_duplicate_signature = any(
+                            list(existing.args.values()) == list(signature.args.values())
+                            for existing in overloads
+                        )
+                        if has_duplicate_signature:
+                            self._error(
+                                f"Duplicate method '{method.name}' in class '{name}' "
+                                f"with same argument signature"
+                            )
+                            continue
+
+                        overloads.append(signature)
+                        
                     self.global_scope.classes[name] = ClassSignature(
                         name = name,
-                        real_name = real_name,
+                        irname = irname,
                         members = member_table,
                         methods = method_table,
                     )
 
-                case types.FunctionDeclaration(name, typ, args, _, real_name):
-                    existing = self.global_scope.resolve_function(self, name, list(args.values()))
+                case types.FunctionDeclaration(name, typ, args, _, irname):
+                    existing = self.global_scope.resolve_function_by_types(name, list(args.values()))
                     if not existing is None:
                         self._error(f"Function '{name}' is already defined with following signature '{existing}'")
+                        continue
 
-                    self.global_scope.functions[name].append(FunctionSignature(
+                    self.global_scope._ensure_function_overloads(name).append(FunctionSignature(
                         name = name,
-                        real_name = real_name,
+                        irname = irname,
                         static = True,
                         typ = typ,
                         args = args,
@@ -222,7 +247,7 @@ class ScopeChecker:
                 continue
             function_scope.values[arg_name] = ValueSignature(
                 name = arg_name,
-                real_name = arg_name,
+                irname = arg_name,
                 mutable = False,
                 typ = arg_type,
             )
@@ -245,7 +270,7 @@ class ScopeChecker:
 
                     function_scope.values[child.name] = ValueSignature(
                         name = child.name,
-                        real_name = child.real_name,
+                        irname = child.irname,
                         mutable = child.mutable,
                         typ = child.typ,
                     )
@@ -272,16 +297,17 @@ class ScopeChecker:
                         )
 
                 case types.FunctionDeclaration():
-                    if child.name in function_scope.functions:
+                    existing_nested = function_scope.resolve_function_by_types(child.name, list(child.args.values()))
+                    if existing_nested is not None:
                         self._error(f"Nested function '{child.name}' is already defined in '{fn.name}'")
                     else:
-                        function_scope.functions[child.name] = FunctionSignature(
+                        function_scope._ensure_function_overloads(child.name).append(FunctionSignature(
                             name = child.name,
-                            real_name = child.real_name,
+                            irname = child.irname,
                             static = True,
                             typ = child.typ,
                             args = child.args,
-                        )
+                        ))
                     self._check_function(child, function_scope)
 
                 case _:
@@ -301,15 +327,21 @@ class ScopeChecker:
                 if signature is None:
                     self._error(f"Unknown variable '{name}'")
                     return None
+                
+                expr.value.irname = signature.irname
                 return signature.typ
             case types.PrimaryExpression(types.FunctionCall(name, args)):
                 arg_types = active_scope.expr_args_to_arg_types(self, args)
                 if arg_types is None:
                     self._error(f"Could not get argument types from function call")
-                signature = active_scope.resolve_function(self, name, arg_types)
+                    return None
+
+                signature = active_scope.resolve_function_by_types(name, arg_types)
                 if signature is None:
                     self._error(f"Unknown function '{name}' with given argument signature")
                     return None
+                
+                expr.value.irname = signature.irname
                 return signature.typ
             case types.UnaryExpression(expr=inner_expr, sign=sign):
                 inner_type = self._infer_expression_type(inner_expr, active_scope)

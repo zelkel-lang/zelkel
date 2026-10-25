@@ -7,13 +7,18 @@ import rich
 
 source = """
 class String {
-    value: str
+    val value: i64
+    
+    fn test() -> void {
+        return
+    }
+    
 }
 
-fn main() -> i64 {
+fn main() -> void {
     val a: i64 = 1
-    val test: i64 = 74 + 123 * (2+3 * 4)
-    return 0
+    val test: i64 = a + 1
+    return
 }
 """
 

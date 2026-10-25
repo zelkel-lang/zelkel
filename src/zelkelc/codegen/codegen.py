@@ -40,14 +40,14 @@ class Codegen:
         for i, m in enumerate(node.members):
             members_str += f"{", " if i != 0 else ""}{m.typ.to_llvm()}"
 
-        self.ir.structs += f"\n%{node.real_name} = type " + "{ " + members_str + " }"
+        self.ir.structs += f"\n%{node.irname} = type " + "{ " + members_str + " }"
 
     def gen_class_declaration(self, node: types.ClassDeclaration):
         members_str = ""
         for i, m in enumerate(node.members):
             members_str += f"{", " if i != 0 else ""}{m.typ.to_llvm()}"
         
-        self.ir.structs += f"\n%{node.real_name} = type " + "{ " + members_str + " }"
+        self.ir.structs += f"\n%{node.irname} = type " + "{ " + members_str + " }"
         
         for func in node.methods:
             self.ir.struct_functions += self.gen_function_declaration(func)
@@ -57,7 +57,7 @@ class Codegen:
         for i, (name, typ) in enumerate(node.args.items()):
             args_str += f"{", " if i != 0 else ""}{typ.to_llvm()} %{name}"
             
-        ir = f"\ndefine {str(node.typ.to_llvm())} @{node.real_name}({args_str}) " + "{"
+        ir = f"\ndefine {str(node.typ.to_llvm())} @{node.irname}({args_str}) " + "{"
         ir += "\nentry:"
         
         for child_node in node.body:
@@ -78,29 +78,27 @@ class Codegen:
         match node.typ:
             case types.Integer64:
                 if node.mutable == True:
-                    ir += f"\n%{node.real_name} = alloca i64, align 8" # TODO: this would only work for i64s, just testing
-                    ir += f"\nstore i64 %{count}, i64* %{node.real_name}, align 8"
+                    ir += f"\n%{node.irname} = alloca i64, align 8" # TODO: this would only work for i64s, just testing
+                    ir += f"\nstore i64 %{count}, i64* %{node.irname}, align 8"
                 else:
-                    ir += f"\n%{node.real_name} = add i64 %{count}, 0" 
+                    ir += f"\n%{node.irname} = add i64 %{count}, 0"
             case _:
                 print(f"gen_value_declaration() for {type(node.typ)} is unimplemented")
                 exit(1)
             
         return ir
     
-    def gen_expression(self, node: types.Expression) -> tuple[int, str]:
+    def gen_expression(self, node: types.Expression) -> tuple[str, str]:
         ir = ""
         
         match type(node):
             case types.BinaryExpression:
-                left_count, left = self.gen_expression(node.left)
-                right_count, right = self.gen_expression(node.right)
+                left_irname, left = self.gen_expression(node.left)
+                right_irname, right = self.gen_expression(node.right)
                 
                 ir += left + right
-                        
-                #match type(node.left.): # TODO: need to know the value type of the expresison here...
-                #    case types.Integer64:
-                op = ""          
+                
+                op = ""
                 match node.op:
                     case '+':
                         op = "add"
@@ -115,11 +113,13 @@ class Codegen:
                         print(f"gen_expression() for BinaryExpression for operator '{node.op}' is unimplemented")
                         exit(1)
                         
-                ir += f"\n%{self.temp_counter} = {op} i64 %{left_count}, %{right_count}"
-                self.temp_counter += 1
-                #    case _:
-                #        print(f"gen_expression() for PrimaryExpression for {type(node.value)}")
-                #        exit(1)
+                match node.left.typ:
+                   case types.Integer64:
+                        ir += f"\n%{self.temp_counter} = {op} i64 %{left_irname}, %{right_irname}"
+                        self.temp_counter += 1
+                   case _:
+                       print(f"gen_expression() for BinaryExpression for {node.left.typ}")
+                       exit(1)
             case types.UnaryExpression:
                 print("gen_expression() for UnaryExpression unimplemented")
                 exit(1)
@@ -128,6 +128,8 @@ class Codegen:
                     case types.Integer64:
                         ir += f"\n%{self.temp_counter} = add i64 {node.value.value}, 0"
                         self.temp_counter += 1
+                    case types.VariableRef:
+                        return node.value.irname, ir
                     case _:
                         print(f"gen_expression() for PrimaryExpression for {type(node.value)}")
                         exit(1)
@@ -135,4 +137,4 @@ class Codegen:
                 print(f"Invalid expression types found during codegen: {node}")
                 exit(1)
 
-        return self.temp_counter - 1, ir
+        return str(self.temp_counter - 1), ir

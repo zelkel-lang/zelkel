@@ -101,7 +101,7 @@ class Parser:
         return types.StructDeclaration(
             name,
             members,
-            real_name = f"{path}.s_{name}"
+            irname = f"{path}.s_{name}"
         )
     
     def parse_member_declaration(self, mutable: bool, member_idx: int) -> types.MemberDeclaration:
@@ -155,7 +155,7 @@ class Parser:
             name,
             members,
             methods,
-            real_name = f"{path}.c_{name}"
+            irname = f"{path}.c_{name}"
         )
     
     def parse_function_declaration(self, path: str) -> types.FunctionDeclaration:
@@ -215,29 +215,25 @@ class Parser:
         
         self.expect(token.RBrace())
         
-        real_name = f"{path}.f_{name}_{typ}"
+        irname = f"{path}.f_{name}_{typ}"
         if name == "main":
-            real_name = "main"
+            irname = "main"
         
         return types.FunctionDeclaration(
             name = name,
             typ = typ,
             args = args,
             body = body,
-            real_name = real_name
+            irname = irname
         )
     
     def parse_return(self) -> types.ReturnStatement:
         self.expect(token.Identifier("return"))
         
-        # TODO: if there is an expression then check for add it?
-    
         expr: Optional[types.Expression] = None    
         if not self.current(token.RBrace()):
             expr = self.parse_expression()
 
-        print(expr)
-        
         return types.ReturnStatement(
             expr
         )
@@ -262,7 +258,7 @@ class Parser:
             mutable,
             typ,
             expr,
-            real_name = f"v_{self.cursor}_{name}"
+            irname = f"v_{self.cursor}_{name}"
         )
     
     def parse_expression(self) -> types.Expression:
@@ -283,7 +279,7 @@ class Parser:
 
             right = self.parse_binary_expression(precedence + 1)
 
-            left = types.BinaryExpression(left, right, op)
+            left = types.BinaryExpression(left, right, op, left.typ)
 
         return left
 
@@ -295,7 +291,7 @@ class Parser:
                 print(f"Invalid unary operator: {op}")
                 exit(1)
             operand = self.parse_unary_expression()
-            return types.UnaryExpression(operand, op)
+            return types.UnaryExpression(operand, op, operand.typ)
 
         return self.parse_primary_expression()
 
@@ -315,17 +311,17 @@ class Parser:
                         args.append(self.parse_expression())
                     
                     self.expect(token.RParen())
-                    return types.PrimaryExpression(types.FunctionCall(t.value, args))
+                    return types.PrimaryExpression(types.FunctionCall(t.value, args, None), types.FunctionCall)
                 else:
-                    return types.PrimaryExpression(types.VariableRef(t.value))
+                    return types.PrimaryExpression(types.VariableRef(t.value, None), types.VariableRef)
 
             case token.Integer():
                 self.cursor += 1
-                return types.PrimaryExpression(types.Integer64(t.value))
+                return types.PrimaryExpression(types.Integer64(t.value), types.Integer64)
 
             case token.String():
                 self.cursor += 1
-                return types.PrimaryExpression(types.String(t.value))
+                return types.PrimaryExpression(types.String(t.value), types.String)
 
             case token.LParen():
                 self.expect(token.LParen())
@@ -345,4 +341,5 @@ class Parser:
             "+": 5, "-": 5,
             "*": 6, "/": 6, "%": 6,
         }
+        
         return table.get(op, 0)

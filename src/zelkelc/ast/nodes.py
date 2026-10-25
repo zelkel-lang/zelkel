@@ -8,13 +8,13 @@ class ClassDeclaration:
     name: str
     members: list[ValueDeclaration]
     methods: list[FunctionDeclaration]
-    real_name: str
+    irname: str
 
 @dataclass
 class StructDeclaration:
     name: str
     members: list[MemberDeclaration]
-    real_name: str
+    irname: str
 
 @dataclass
 class MemberDeclaration:
@@ -29,7 +29,7 @@ class ValueDeclaration:
     mutable: bool
     typ: values.Value
     expr: Expression
-    real_name: str
+    irname: str
     
 @dataclass
 class FunctionDeclaration:
@@ -37,7 +37,7 @@ class FunctionDeclaration:
     typ: values.Value
     args: dict[str, values.Value]
     body: list[Node]
-    real_name: str
+    irname: str
     
 @dataclass
 class ReturnStatement:
