@@ -3,14 +3,15 @@
 )
 
 #llvm(
-    #"declare i32 @printf(ptr, ...)"#
+    "declare i32 @printf(ptr, ...)"
 )
 
 fn main() -> void {
-    val test: i64 = 2 + 2*3
+    val test: i64 = 32894732 + 1
     
     #llvm(
-        "%call = call i32 (ptr, ...) @printf(ptr @int.fmt, i64 %v_27_test)"
+        "%call = call i32 (ptr, ...) @printf(ptr @int.fmt, i64 %{irname})"
+
     )
     
     #llvm(
