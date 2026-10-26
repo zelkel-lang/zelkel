@@ -42,8 +42,12 @@ class FunctionDeclaration:
 @dataclass
 class ReturnStatement:
     expr: Optional[Expression]
+    
+@dataclass
+class MacroCall:
+    body: str
 
-Node = ClassDeclaration | ValueDeclaration | FunctionDeclaration | StructDeclaration
+Node = ClassDeclaration | ValueDeclaration | FunctionDeclaration | StructDeclaration | MacroCall
 
 @dataclass
 class BinaryExpression:
@@ -74,6 +78,18 @@ class Integer64:
     
     def __eq__(self, other):
         if not isinstance(other, Integer64):
+            return False
+        return self.value == other.value
+    
+@dataclass
+class Float64:
+    value: int
+    
+    def to_llvm() -> str:
+        return "f64"
+    
+    def __eq__(self, other):
+        if not isinstance(other, Float64):
             return False
         return self.value == other.value
 
@@ -116,4 +132,4 @@ class Ptr[T]:
 class Val[T]:
     pass
 
-Value = Integer64 | String | Void | VariableRef | FunctionCall
+Value = Integer64 | Float64 | String | Void | VariableRef | FunctionCall

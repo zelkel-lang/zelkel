@@ -140,6 +140,8 @@ class ScopeChecker:
                         self._check_function(method, self.global_scope)
                 case types.StructDeclaration():
                     continue
+                case types.MacroCall():
+                    continue
                 case _:
                     self._error(f"Unsupported top-level node: {type(top_level)}")
 
@@ -234,6 +236,9 @@ class ScopeChecker:
                         typ = typ,
                         args = args,
                     ))
+                    
+                case types.MacroCall():
+                    continue
 
                 case _:
                     self._error(f"Unsupported top-level node while collecting symbols: {type(top_level)}")
@@ -309,6 +314,9 @@ class ScopeChecker:
                             args = child.args,
                         ))
                     self._check_function(child, function_scope)
+                    
+                case types.MacroCall():
+                    continue
 
                 case _:
                     self._error(f"Unsupported node in function '{fn.name}': {type(child)}")
@@ -320,6 +328,8 @@ class ScopeChecker:
         match expr:
             case types.PrimaryExpression(types.Integer64()):
                 return types.Integer64
+            case types.PrimaryExpression(types.Float64()):
+                    return types.Float64
             case types.PrimaryExpression(types.String()):
                 return types.String
             case types.PrimaryExpression(types.VariableRef(name)):
@@ -344,7 +354,7 @@ class ScopeChecker:
                 
                 expr.value.irname = signature.irname
                 return signature.typ
-            case types.UnaryExpression(expr=inner_expr, sign=sign):
+            case types.UnaryExpression(inner_expr, sign):
                 inner_type = self._infer_expression_type(inner_expr, active_scope)
                 if inner_type is None:
                     return None
@@ -365,12 +375,22 @@ class ScopeChecker:
                         f"{self._type_name(left_type)} vs {self._type_name(right_type)}"
                     )
                     return None
-                if left_type is not types.Integer64:
-                    self._error(
-                        f"Operator '{op}' currently only supports i64, got {self._type_name(left_type)}"
-                    )
-                    return None
-                return types.Integer64
+                
+                match left_type:
+                    case types.Integer64:
+                        if op not in ["+", "-", "*"]:
+                            self._error(
+                                f"Operator '{op}' does not support {self._type_name(left_type)}"
+                            )
+                        return types.Integer64
+                    case types.Float64:
+                        if op not in ["+", "-", "*", "/"]:
+                            self._error(
+                                f"Operator '{op}' does not support {self._type_name(left_type)}"
+                            )
+                        return types.Float64
+                    case _:
+                        return None
             case _:
                 self._error(f"Unsupported expression type: {type(expr)}")
                 return None
@@ -381,6 +401,8 @@ class ScopeChecker:
     def _type_token(self, typ: object) -> str:
         if typ is types.Integer64 or isinstance(typ, types.Integer64):
             return "i64"
+        if typ is types.Float64 or isinstance(typ, types.Float64):
+            return "f64"
         if typ is types.String or isinstance(typ, types.String):
             return "str"
         if typ is types.Void or isinstance(typ, types.Void):

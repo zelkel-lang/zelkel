@@ -6,19 +6,21 @@ from src.zelkelc.codegen.codegen import Codegen
 import rich
 
 source = """
-class String {
-    val value: i64
-    
-    fn test() -> void {
-        return
-    }
-    
-}
+#llvm(
+    #"@int.fmt = private unnamed_addr constant [5 x i8] c"%ld\0A\00""#
+)
+
+#llvm(
+    #"declare i32 @printf(ptr, ...)"#
+)
 
 fn main() -> void {
-    val a: i64 = 10
-    val b: i64 = 32
-    val test: i64 = a + b * 3
+    val test: i64 = 2 + 2*3
+    
+    #llvm(
+        "%call = call i32 (ptr, ...) @printf(ptr @int.fmt, i64 %v_27_test)"
+    )
+    
     return
 }
 """

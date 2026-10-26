@@ -15,16 +15,23 @@ def lex(source: str) -> list[token.Token]:
         elif c.isnumeric():
             i += 1
             
-            integer = c
-            for _, integer_c in enumerate(source[i:]):
-                if integer_c == '_':
+            isfloat = False
+            num = c
+            for _, num_c in enumerate(source[i:]):
+                if num_c == '_':
                     i += 1
                     continue
-                if not integer_c.isnumeric():
+                if num_c == '.':
+                    isfloat = True
+                elif not num_c.isnumeric():
                     break
                 i += 1
-                integer += integer_c
-            tokens.append(token.Integer(int(integer)))
+                num += num_c
+                
+            if isfloat:
+                tokens.append(token.Float(float(num)))
+            else:
+                tokens.append(token.Integer(int(num)))
         elif c.isalpha() or c == '_':
             i += 1
             
@@ -49,6 +56,20 @@ def lex(source: str) -> list[token.Token]:
                 break
             i += 1
             tokens.append(token.String(string))
+        elif c == "#" and i + 1 < len(source) and source[i + 1] == '"':
+            i += 2
+
+            string = ""
+            while i < len(source):
+                if source[i] == '"' and i + 1 < len(source) and source[i + 1] == '#':
+                    i += 2
+                    tokens.append(token.String(string))
+                    break
+                string += source[i]
+                i += 1
+            else:
+                print("No '\"#' to close string")
+                break
         elif c == '-' and source[i + 1] == '>':
             tokens.append(token.Arrow())
             i += 2
@@ -73,6 +94,9 @@ def lex(source: str) -> list[token.Token]:
         else:
             match c:
                 case ' ' | '\n':
+                    i += 1
+                case '#':
+                    tokens.append(token.Pound())
                     i += 1
                 case '(':
                     tokens.append(token.LParen())

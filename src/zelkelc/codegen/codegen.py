@@ -1,14 +1,18 @@
 import src.zelkelc.ast.types as types
 
 class IRTable:
+    top: str
     structs: str
     struct_functions: str
     global_functions: str
+    bottom: str
     
     def __init__(self):
+        self.top = ""
         self.structs = ""
         self.struct_functions = ""
         self.global_functions = ""
+        self.bottom = ""
 
 class Codegen:
     ast: list[types.FunctionDeclaration | types.ClassDeclaration]
@@ -29,11 +33,22 @@ class Codegen:
                     self.gen_class_declaration(node)
                 case types.FunctionDeclaration():
                     self.ir.global_functions += self.gen_function_declaration(node)
+                case types.MacroCall():
+                    self.ir.top = rf"{node.body}" + "\n" + self.ir.top
                 case _:
                     print(f"Invalid node found during codegen {type(node)}")
                     exit(1)
+                    
+        self.gen_main_function()
         
-        return self.ir.structs + "\n" + self.ir.struct_functions + "\n" + self.ir.global_functions
+        return self.ir.top + "\n" + self.ir.structs + "\n" + self.ir.struct_functions + "\n" + self.ir.global_functions + "\n" + self.ir.bottom
+    
+    def gen_main_function(self):
+        self.ir.bottom += "define i32 @main() {\n"
+        self.ir.bottom += "entry:\n"
+        self.ir.bottom += "call void @zkmain()\n"
+        self.ir.bottom += "ret i32 0\n"
+        self.ir.bottom += "}\n"
     
     def gen_struct_declaration(self, node: types.StructDeclaration):
         members_str = ""
@@ -64,10 +79,16 @@ class Codegen:
             match child_node:
                 case types.ValueDeclaration():
                     ir += self.gen_value_declaration(child_node)
-                case _:
+                case types.MacroCall():
+                    ir += "\n" + rf"{child_node.body}"
+                case types.ReturnStatement():
+                    print(f"gen_function_declaration() {type(child_node)} is unimplemented")
                     continue
+                case _:
+                    print(f"gen_function_declaration() {type(child_node)} is unimplemented")
+                    exit(1)
         
-        return ir + "\n}"
+        return ir + "\n}\n"
     
     def gen_value_declaration(self, node: types.ValueDeclaration) -> str:
         ir = ""
@@ -78,15 +99,47 @@ class Codegen:
         match node.typ:
             case types.Integer64:
                 if node.mutable == True:
-                    ir += f"\n%{node.irname} = alloca i64, align 8" # TODO: this would only work for i64s, just testing
+                    ir += f"\n%{node.irname} = alloca i64, align 8"
                     ir += f"\nstore i64 %{count}, i64* %{node.irname}, align 8"
                 else:
                     ir += f"\n%{node.irname} = add i64 %{count}, 0"
+            case types.Float64:
+                if node.mutable == True:
+                    ir += f"\n%{node.irname} = alloca f64, align 8"
+                    ir += f"\nstore f64 %{count}, f64* %{node.irname}, align 8"
+                else:
+                    ir += f"\n%{node.irname} = fadd f64 %{count}, 0"
             case _:
-                print(f"gen_value_declaration() for {type(node.typ)} is unimplemented")
+                print(f"gen_value_declaration() for {node.typ} is unimplemented")
                 exit(1)
             
         return ir
+    
+    def make_i64_op(self, sign: str) -> str:
+        match sign:
+            case '+':
+                return "add"
+            case '-':
+                return "sub"
+            case '*':
+                return "mul"
+            case _:
+                print(f"Cannot do operation '{sign}' on i64")
+                exit(1)
+                
+    def make_f64_op(self, sign: str) -> str:
+        match sign:
+            case '+':
+                return "fadd"
+            case '-':
+                return "fsub"
+            case '*':
+                return "fmul"
+            case '/':
+                return "fdiv"
+            case _:
+                print(f"Cannot do operation '{sign}' on f64")
+                exit(1)
     
     def gen_expression(self, node: types.Expression) -> tuple[str, str]:
         ir = ""
@@ -97,30 +150,21 @@ class Codegen:
                 right_irname, right = self.gen_expression(node.right)
                 
                 ir += left + right
-                
-                op = ""
-                match node.op:
-                    case '+':
-                        op = "add"
-                    case '-':
-                        op = "sub"
-                    case '*':
-                        op = "mul"
-                    case '/':
-                        print("gen_expression() for BinaryExpression for operator '/' is unimplemented")
-                        exit(1)
-                    case _:
-                        print(f"gen_expression() for BinaryExpression for operator '{node.op}' is unimplemented")
-                        exit(1)
                         
                 match node.left.typ:
                     case types.Integer64:
-                        ir += f"\n%{self.temp_counter} = {op} i64 %{left_irname}, %{right_irname}"
+                        ir += f"\n%{self.temp_counter} = {self.make_i64_op(node.op)} i64 %{left_irname}, %{right_irname}"
+                        self.temp_counter += 1
+                    case types.Float64:
+                        ir += f"\n%{self.temp_counter} = {self.make_f64_op(node.op)} f64 %{left_irname}, %{right_irname}"
                         self.temp_counter += 1
                     case types.VariableRef:
                         match node.left.value.typ:
                             case types.Integer64:
-                                ir += f"\n%{self.temp_counter} = {op} i64 %{left_irname}, %{right_irname}"
+                                ir += f"\n%{self.temp_counter} = {self.make_i64_op(node.op)} i64 %{left_irname}, %{right_irname}"
+                                self.temp_counter += 1
+                            case types.Float64:
+                                ir += f"\n%{self.temp_counter} = {self.make_f64_op(node.op)} f64 %{left_irname}, %{right_irname}"
                                 self.temp_counter += 1
                             case _:
                                 print(f"gen_expression() for BinaryExpression left operand variable type '{node.left.value.typ}' is unimplemented")
@@ -130,10 +174,14 @@ class Codegen:
             case types.UnaryExpression:
                 print("gen_expression() for UnaryExpression unimplemented")
                 exit(1)
+                
             case types.PrimaryExpression:
                 match type(node.value):
                     case types.Integer64:
                         ir += f"\n%{self.temp_counter} = add i64 {node.value.value}, 0"
+                        self.temp_counter += 1
+                    case types.Float64:
+                        ir += f"\n%{self.temp_counter} = fadd f64 {node.value.value}, 0"
                         self.temp_counter += 1
                     case types.VariableRef:
                         return node.value.irname, ir

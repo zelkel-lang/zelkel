@@ -41,6 +41,8 @@ class Parser:
                 return types.String
             case "i64":
                 return types.Integer64
+            case "f64":
+                return types.Float64
             case "void" if is_return_type == True:
                 return types.Void
             case _:
@@ -65,12 +67,32 @@ class Parser:
                         case _:
                             print(f"Invalid keyword in global {t.value}")
                             exit(1)
+                case token.Pound(): # TODO: hard coded to that all macro calls are treated as #llvm() macro calls
+                    self.expect(token.Pound())
+                    ident = self.expect_type(token.Identifier)
+                    
+                    match ident.value:
+                        case "fn":
+                            print(f"Macro declaration is not implemented")
+                            exit(1)
+                        case _:
+                            ast.append(self.parse_macro_call(ident))
                 case _:
                     print(f"Invalid token found while parsing global {t}")
                     exit(1)
                             
         
         return ast
+    
+    def parse_macro_call(self, ident: token.Identifier) -> types.MacroCall:
+        # Hard core builtin #llvm macro block
+        
+        self.expect(token.LParen())
+        body = self.expect_type(token.String)
+        self.expect(token.RParen())
+        
+        return types.MacroCall(body.value)
+                
 
     def parse_struct_declaration(self, path: str) -> types.StructDeclaration:
         self.expect(token.Identifier("struct"))
@@ -204,6 +226,16 @@ class Parser:
                         case _:
                             print(f"Invalid keyword in function body {t.value}")
                             exit(1)
+                case token.Pound(): # TODO: hard coded to that all macro calls are treated as #llvm() macro calls
+                    self.expect(token.Pound())
+                    ident = self.expect_type(token.Identifier)
+                    
+                    match ident.value:
+                        case "fn":
+                            print(f"Macro declaration is not implemented")
+                            exit(1)
+                        case _:
+                            body.append(self.parse_macro_call(ident))
                 case _:
                     #TODO: expression statement
                     print(f"implement expression statement: {t}")
@@ -217,7 +249,7 @@ class Parser:
         
         irname = f"{path}.f_{name}_{typ}"
         if name == "main":
-            irname = "main"
+            irname = "zkmain"
         
         return types.FunctionDeclaration(
             name = name,
@@ -318,6 +350,10 @@ class Parser:
             case token.Integer():
                 self.cursor += 1
                 return types.PrimaryExpression(types.Integer64(t.value), types.Integer64)
+            
+            case token.Float():
+                self.cursor += 1
+                return types.PrimaryExpression(types.Float64(t.value), types.Float64)
 
             case token.String():
                 self.cursor += 1

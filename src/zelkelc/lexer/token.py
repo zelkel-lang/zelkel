@@ -11,6 +11,14 @@ class String:
 @dataclass
 class Integer:
     value: int
+    
+@dataclass
+class Float:
+    value: float
+
+@dataclass
+class Pound:
+    pass
 
 @dataclass
 class LParen:
@@ -52,4 +60,4 @@ class Equals:
 class Operator:
     value: str
 
-Token = Identifier | String | Integer | LParen | RParen | LBrace | RBrace | Period | Comma | Arrow | Colon | Equals | Operator
+Token = Identifier | String | Integer | Float | LParen | RParen | LBrace | RBrace | Period | Comma | Arrow | Colon | Equals | Operator
