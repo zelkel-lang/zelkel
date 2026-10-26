@@ -21,6 +21,7 @@
       devShells.${system}.default = pkgs.mkShell {
         packages = [
           pythonEnv
+          pkgs.ruff
         ];
 
         shellHook = ''
