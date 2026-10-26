@@ -10,7 +10,7 @@ fn main() -> void {
     val test: i64 = 32894732 + 1
     
     #llvm(
-        "%call = call i32 (ptr, ...) @printf(ptr @int.fmt, i64 %{irname})"
+        "%call = call i32 (ptr, ...) @printf(ptr @int.fmt, i64 %{:irname})"
 
     )
     

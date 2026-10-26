@@ -5,8 +5,8 @@ TODO: tomorrow, implement more macro stuff
 val test: i64 = 1 + 2*3 + 3*4
 
 #llvm(
-  "%call = call i32 (ptr, ...) @printf(ptr @int.fmt, i64 %{irname})",
-  test // Test variable's irname is inputted inplace or {irname} in the llvm ir
+  "%call = call i32 (ptr, ...) @printf(ptr @int.fmt, i64 %{:irname})",
+  test // Test variable's irname is inputted inplace or {:irname} in the llvm ir
 )
 ```
 
