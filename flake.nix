@@ -19,9 +19,11 @@
     in
     {
       devShells.${system}.default = pkgs.mkShell {
-        packages = [
+        packages = with pkgs; [
           pythonEnv
-          pkgs.ruff
+          ruff
+          llvmPackages_latest.llvm
+          clang
         ];
 
         shellHook = ''

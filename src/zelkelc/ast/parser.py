@@ -229,7 +229,6 @@ class Parser:
                             body.append(self.parse_value_declaration(True))
                         case "return":
                             body.append(self.parse_return())
-                            hasReturn = True
                         case _:
                             print(f"Invalid keyword in function body {t.value}")
                             sys.exit(1)
@@ -247,10 +246,6 @@ class Parser:
                     # TODO: expression statement
                     print(f"implement expression statement: {t}")
                     sys.exit(1)
-
-        if hasReturn:
-            print("Function must have return")
-            sys.exit(1)
 
         self.expect(token.RBrace())
 
