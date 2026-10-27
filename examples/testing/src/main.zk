@@ -15,10 +15,9 @@ fn test() -> i64 {
 }
 
 fn main() -> void {
-    const 
     val test: i64 = 123 * 2
     val test2: f64 = 5.0 * 0.5 + 2.0
-    
+
     #llvm(
         "%call = call i32 (ptr, ...) @printf(ptr @int.fmt, i64 %v_42_test)"
     )
