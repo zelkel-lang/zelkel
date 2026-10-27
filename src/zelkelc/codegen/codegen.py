@@ -96,10 +96,7 @@ class Codegen:
                 case types.MacroCall():
                     ir += "\n" + rf"{child_node.body}"
                 case types.ReturnStatement():
-                    print(
-                        f"gen_function_declaration() {type(child_node)} is unimplemented"
-                    )
-                    continue
+                    ir += self.gen_return_statement(child_node)
                 case _:
                     print(
                         f"gen_function_declaration() {type(child_node)} is unimplemented"
@@ -123,14 +120,29 @@ class Codegen:
                     ir += f"\n%{node.irname} = add i64 %{count}, 0"
             case types.Float64:
                 if node.mutable:
-                    ir += f"\n%{node.irname} = alloca f64, align 8"
-                    ir += f"\nstore f64 %{count}, f64* %{node.irname}, align 8"
+                    ir += f"\n%{node.irname} = alloca double, align 8"
+                    ir += f"\nstore double %{count}, double* %{node.irname}, align 8"
                 else:
-                    ir += f"\n%{node.irname} = fadd f64 %{count}, 0"
+                    ir += f"\n%{node.irname} = fadd double %{count}, 0.0"
             case _:
                 print(f"gen_value_declaration() for {node.typ} is unimplemented")
                 sys.exit(1)
 
+        return ir
+    
+    def gen_return_statement(self, node: types.ReturnStatement) -> str:
+        print(node)
+        print(node.expr)
+        
+        ir = ""
+        
+        if node.expr:
+            count, expr = self.gen_expression(node.expr)
+            ir += expr
+            ir += f"\nret {node.expr.typ.to_llvm()} %{count}"
+        else:
+            ir += "\nret void"
+            
         return ir
 
     def make_i64_op(self, sign: str) -> str:
@@ -174,7 +186,7 @@ class Codegen:
                         ir += f"\n%{self.temp_counter} = {self.make_i64_op(node.op)} i64 %{left_irname}, %{right_irname}"
                         self.temp_counter += 1
                     case types.Float64:
-                        ir += f"\n%{self.temp_counter} = {self.make_f64_op(node.op)} f64 %{left_irname}, %{right_irname}"
+                        ir += f"\n%{self.temp_counter} = {self.make_f64_op(node.op)} double %{left_irname}, %{right_irname}"
                         self.temp_counter += 1
                     case types.VariableRef:
                         match node.left.value.typ:
@@ -182,7 +194,7 @@ class Codegen:
                                 ir += f"\n%{self.temp_counter} = {self.make_i64_op(node.op)} i64 %{left_irname}, %{right_irname}"
                                 self.temp_counter += 1
                             case types.Float64:
-                                ir += f"\n%{self.temp_counter} = {self.make_f64_op(node.op)} f64 %{left_irname}, %{right_irname}"
+                                ir += f"\n%{self.temp_counter} = {self.make_f64_op(node.op)} double %{left_irname}, %{right_irname}"
                                 self.temp_counter += 1
                             case _:
                                 print(
@@ -203,7 +215,7 @@ class Codegen:
                         ir += f"\n%{self.temp_counter} = add i64 {node.value.value}, 0"
                         self.temp_counter += 1
                     case types.Float64:
-                        ir += f"\n%{self.temp_counter} = fadd f64 {node.value.value}, 0"
+                        ir += f"\n%{self.temp_counter} = fadd double {node.value.value}, 0.0"
                         self.temp_counter += 1
                     case types.VariableRef:
                         return node.value.irname, ir

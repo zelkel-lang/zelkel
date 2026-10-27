@@ -32,6 +32,21 @@ class Parser:
     def current_type(self, tok_type: token.Token) -> bool:
         return type(self.tokens[self.cursor]) is tok_type
 
+    @staticmethod
+    def type_to_str(typ: types.Value, is_return_type: bool) -> types.Value:
+        match typ:
+            case types.String:
+                return "str"
+            case types.Integer64:
+                return "i64"
+            case types.Float64:
+                return "f64"
+            case types.Void if is_return_type:
+                return "void"
+            case _:
+                print(f"Invalid type found in type_to_str: {typ}")
+                sys.exit(1)
+
     def parse_type(self, is_return_type: bool) -> types.Value:
         identifier = self.expect_type(token.Identifier)
         match identifier.value:
@@ -44,7 +59,7 @@ class Parser:
             case "void" if is_return_type:
                 return types.Void
             case _:
-                print("Invalid type found in parse_type")
+                print(f"Invalid type found in parse_type: {identifier.value}")
                 sys.exit(1)
 
     def parse(self):
@@ -208,7 +223,6 @@ class Parser:
         self.expect(token.LBrace())
 
         body: list[types.Node] = []
-        hasReturn: bool = False  # TODO: should be replaced with real return tree checking, this is not a good system
 
         while (
             self.cursor < len(self.tokens)
@@ -249,7 +263,7 @@ class Parser:
 
         self.expect(token.RBrace())
 
-        irname = f"{path}.f_{name}_{typ}"
+        irname = f"{path}.f_{name}_{self.type_to_str(typ, True)}"
         if name == "main":
             irname = "zkmain"
 

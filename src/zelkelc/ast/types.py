@@ -107,7 +107,7 @@ class Float64:
     value: int
 
     def to_llvm() -> str:
-        return "f64"
+        return "double"
 
     def __eq__(self, other):
         if not isinstance(other, Float64):
