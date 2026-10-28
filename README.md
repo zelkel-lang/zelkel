@@ -18,6 +18,14 @@ Lexer --> Preprocessor (unimplemented) --> Parser --> Expander --> Validator -->
   - explicit value with * or explicit pointer with &. You can also use & and * on a "dynamic" type to get both, "dynamic" types are both at the same time, but in reality they are probably the pointer and then you know both 
 
 ## Planning code + ideas + sketch, ... etc ([see also](https://github.com/zelkel-lang/zelkel-syntax-demo))
+### Macros
+```rust
+#fn name($x: expr, $y: ident) {
+    ... template tokens ...
+}
+```
+
+### Just a bunch of stuff
 ```kotlin
 class Parser {
   val tokens: Arr<Token>

@@ -122,9 +122,30 @@ class Parser:
         self.expect(token.Pound())
         ident = self.expect_type(token.Identifier)
         if ident.value == "fn":
-            # return self.parse_macro_definition()
-            raise ParseError("Implemented parse_macro_definition")
+            return self.parse_macro_definition()
         return self.parse_macro_call(ident)
+
+
+    def parse_macro_definition(self) -> types.MacroDefinition:
+        name = self.expect_type(token.Identifier).value
+
+        self.expect(token.LParen())
+        params: list[tuple[str, str]] = []
+        while not self.current(token.RParen()):
+            if params:
+                self.expect(token.Comma())
+            self.expect(token.Dollar())
+            pname = self.expect_type(token.Identifier).value
+            self.expect(token.Colon())
+            kind = self.expect_type(token.Identifier).value
+            if kind not in ("expr", "ident", "type", "tt"):
+                raise ParseError(f"Unknown macro fragment kind: {kind}")
+            params.append((pname, kind))
+        self.expect(token.RParen())
+
+        # Body is a { ... } token tree, stored unparsed
+        body = self.take_delimited()
+        return types.MacroDefinition(name=name, params=params, body=body)
 
     def parse_macro_call(self, ident: token.Identifier) -> types.MacroCall:
         args = self.take_delimited()
