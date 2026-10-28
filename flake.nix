@@ -16,11 +16,17 @@
       pythonEnv = pkgs.python3.withPackages (ps: with ps; [
         rich
       ]);
+
+      zk = pkgs.writeShellScriptBin "zk" ''
+        export PYTHONPATH="${builtins.toString ./.}:$PYTHONPATH"
+        exec ${pythonEnv}/bin/python -m src.zelkelbt "$@"
+      '';
     in
     {
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
           pythonEnv
+          zk
           ruff
           llvmPackages_latest.llvm
           clang
@@ -28,6 +34,7 @@
 
         shellHook = ''
           export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:$LD_LIBRARY_PATH"
+          export PYTHONPATH="${builtins.toString ./.}:$PYTHONPATH"
         '';
       };
     };

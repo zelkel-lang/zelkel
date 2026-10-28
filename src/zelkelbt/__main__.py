@@ -1,6 +1,7 @@
 import argparse
+import shutil
 import subprocess
-import sys
+from pathlib import Path
 
 from src.zelkelbt.build import build_package
 from src.zelkelbt.config import get_config
@@ -15,7 +16,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-V",
+        "-v",
         "--version",
         action="version",
         version="zk 1.0.0",
@@ -49,7 +50,7 @@ if __name__ == "__main__":
         help="Enable release build mode",
     )
 
-    clean_parser = subparsers.add_parser("clean", help="Remove the build/ directory")
+    clean_parser = subparsers.add_parser("clean", help="Remove the 'target/' directory")
 
     run_parser = subparsers.add_parser(
         "run", aliases=["r"], help="Compile and run the current package"
@@ -58,6 +59,22 @@ if __name__ == "__main__":
         "--debug-info",
         action="store_true",
         help="Enable debug output while running the package",
+    )
+    run_group = run_parser.add_mutually_exclusive_group()
+    run_group.add_argument(
+        "--debug",
+        dest="run_mode",
+        action="store_const",
+        const="debug",
+        default="debug",
+        help="Enable debug run mode",
+    )
+    run_group.add_argument(
+        "--release",
+        dest="run_mode",
+        action="store_const",
+        const="release",
+        help="Enable release run mode",
     )
 
     parser.usage = "zk [COMMAND] [OPTIONS]"
@@ -68,11 +85,14 @@ if __name__ == "__main__":
         config = get_config()
         build_package(args.build_mode, config, args.debug_info)
     elif args.command == "clean":
-        print("TODO: implement clean command")
-        sys.exit(1)
+        get_config()
+
+        target_dir = Path("target")
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
     elif args.command in ["run", "r"]:
         config = get_config()
-        build_package("debug", config, args.debug_info)
+        build_package(args.run_mode, config, args.debug_info)
         subprocess.run([f"./target/debug/{config['package']['name']}"], check=True)
     else:
         parser.print_help()
