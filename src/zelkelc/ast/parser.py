@@ -1,36 +1,44 @@
-import sys
-from typing import Optional
+from itertools import count
 
 from src.zelkelc.ast import types
 from src.zelkelc.lexer import token
 
 
+class ParseError(Exception):
+    pass
+
+
 class Parser:
     tokens: list[token.Token]
     cursor: int
+    ids: count
 
-    def __init__(self, tokens: list[token.Token], cursor: int):
+    def __init__(self, tokens: list[token.Token], cursor: int, ids: count):
         self.tokens = tokens
         self.cursor = cursor
+        self.ids = ids
 
     def expect(self, tok: token.Token):
         if self.tokens[self.cursor] != tok:
-            print(f"Expected {tok}, but found {self.tokens[self.cursor]}")
-            sys.exit(1)
+            raise ParseError(f"Expected {tok}, but found {self.tokens[self.cursor]}")
         self.cursor += 1
 
     def expect_type(self, tok_type: token.Token) -> token.Token:
         if type(self.tokens[self.cursor]) is not tok_type:
-            print(f"Expected {tok_type}, but found {type(self.tokens[self.cursor])}")
-            sys.exit(1)
+            raise ParseError(
+                f"Expected {tok_type}, but found {type(self.tokens[self.cursor])}"
+            )
         self.cursor += 1
         return self.tokens[self.cursor - 1]
 
-    def current(self, tok: token.Token):
-        return self.tokens[self.cursor] == tok
+    def current(self, tok) -> bool:
+        return self.cursor < len(self.tokens) and self.tokens[self.cursor] == tok
 
-    def current_type(self, tok_type: token.Token) -> bool:
-        return type(self.tokens[self.cursor]) is tok_type
+    def current_type(self, tok_type) -> bool:
+        return (
+            self.cursor < len(self.tokens)
+            and type(self.tokens[self.cursor]) is tok_type
+        )
 
     @staticmethod
     def type_to_str(typ: types.Value, is_return_type: bool) -> types.Value:
@@ -44,8 +52,7 @@ class Parser:
             case types.Void if is_return_type:
                 return "void"
             case _:
-                print(f"Invalid type found in type_to_str: {typ}")
-                sys.exit(1)
+                raise ParseError(f"Invalid type found in type_to_str: {typ}")
 
     def parse_type(self, is_return_type: bool) -> types.Value:
         identifier = self.expect_type(token.Identifier)
@@ -59,53 +66,69 @@ class Parser:
             case "void" if is_return_type:
                 return types.Void
             case _:
-                print(f"Invalid type found in parse_type: {identifier.value}")
-                sys.exit(1)
+                raise ParseError(
+                    f"Invalid type found in parse_type: {identifier.value}"
+                )
+
+    def parse_item(self, path: str = "_main.zk_") -> types.Node:
+        t = self.tokens[self.cursor]
+
+        match t:
+            case token.Identifier():
+                match t.value:
+                    case "fn":
+                        return self.parse_function_declaration(path)
+                    case "struct":
+                        return self.parse_struct_declaration(path)
+                    case "class":
+                        return self.parse_class_declaration(path)
+                    case _:
+                        raise ParseError(f"Invalid keyword in global {t.value}")
+            case token.Pound():
+                return self.parse_pound()
+            case _:
+                raise ParseError(f"Invalid token found while parsing global {t}")
+
+    def parse_items(self) -> list[types.Node]:
+        items = []
+        while self.cursor < len(self.tokens):
+            items.append(self.parse_item())
+        return items
 
     def parse(self):
-        ast: list[types.FunctionDeclaration | types.ClassDeclaration] = []
+        return self.parse_items()
 
-        while self.cursor < len(self.tokens):
+    def take_delimited(self) -> list[token.Token]:
+        if self.current(token.LParen()):
+            open_t, _close_t = token.LParen(), token.RParen()
+        elif self.current(token.LBrace()):
+            open_t, _close_t = token.LBrace(), token.RBrace()
+        else:
+            raise ParseError("Expected '(' or '{' to start delimited token tree")
+        self.expect(open_t)
+        depth, start = 1, self.cursor
+        while depth:
+            if self.cursor >= len(self.tokens):
+                raise ParseError("unclosed delimited group")
             t = self.tokens[self.cursor]
+            if isinstance(t, (token.LParen, token.LBrace)):
+                depth += 1
+            elif isinstance(t, (token.RParen, token.RBrace)):
+                depth -= 1
+            self.cursor += 1
+        return self.tokens[start : self.cursor - 1]
 
-            match t:
-                case token.Identifier():
-                    match t.value:
-                        case "fn":
-                            ast.append(
-                                self.parse_function_declaration("_main.zk_")
-                            )  # TODO: replace with actual filepath to the file
-                        case "struct":
-                            ast.append(self.parse_struct_declaration("_main.zk_"))
-                        case "class":
-                            ast.append(self.parse_class_declaration("_main.zk_"))
-                        case _:
-                            print(f"Invalid keyword in global {t.value}")
-                            sys.exit(1)
-                case token.Pound():  # TODO: hard coded to that all macro calls are treated as #llvm() macro calls
-                    self.expect(token.Pound())
-                    ident = self.expect_type(token.Identifier)
-
-                    match ident.value:
-                        case "fn":
-                            print("Macro declaration is not implemented")
-                            sys.exit(1)
-                        case _:
-                            ast.append(self.parse_macro_call(ident))
-                case _:
-                    print(f"Invalid token found while parsing global {t}")
-                    sys.exit(1)
-
-        return ast
+    def parse_pound(self) -> types.Node:
+        self.expect(token.Pound())
+        ident = self.expect_type(token.Identifier)
+        if ident.value == "fn":
+            # return self.parse_macro_definition()
+            raise ParseError("Implemented parse_macro_definition")
+        return self.parse_macro_call(ident)
 
     def parse_macro_call(self, ident: token.Identifier) -> types.MacroCall:
-        # Hard core builtin #llvm macro block
-
-        self.expect(token.LParen())
-        body = self.expect_type(token.String)
-        self.expect(token.RParen())
-
-        return types.MacroCall(body.value)
+        args = self.take_delimited()
+        return types.MacroCall(name=ident.value, args=args)
 
     def parse_struct_declaration(self, path: str) -> types.StructDeclaration:
         self.expect(token.Identifier("struct"))
@@ -132,11 +155,13 @@ class Parser:
                                 self.parse_member_declaration(True, len(members))
                             )
                         case _:
-                            print(f"Invalid keyword in struct body {t.value}")
-                            sys.exit(1)
+                            raise ParseError(
+                                f"Invalid keyword in struct body {t.value}"
+                            )
                 case _:
-                    print(f"Invalid token found while parsing class declaration: {t}")
-                    sys.exit(1)
+                    raise ParseError(
+                        f"Invalid token found while parsing class declaration: {t}"
+                    )
 
         self.expect(token.RBrace())
 
@@ -187,15 +212,45 @@ class Parser:
                                 self.parse_member_declaration(True, len(members))
                             )
                         case _:
-                            print(f"Invalid keyword in class body {t.value}")
-                            sys.exit(1)
+                            raise ParseError(f"Invalid keyword in class body {t.value}")
                 case _:
-                    print(f"Invalid token found while parsing class declaration: {t}")
-                    sys.exit(1)
+                    raise ParseError(
+                        f"Invalid token found while parsing class declaration: {t}"
+                    )
 
         self.expect(token.RBrace())
 
         return types.ClassDeclaration(name, members, methods, irname=f"{path}.c_{name}")
+
+    def parse_statement(self, path: str) -> types.Node:
+        t = self.tokens[self.cursor]
+
+        match t:
+            case token.Identifier():
+                match t.value:
+                    case "fn":
+                        return self.parse_function_declaration(path)
+                    case "val":
+                        return self.parse_value_declaration(False)
+                    case "var":
+                        return self.parse_value_declaration(True)
+                    case "return":
+                        return self.parse_return()
+                    case _:
+                        raise ParseError(f"Invalid keyword in function body {t.value}")
+            case token.Pound():
+                return self.parse_pound()
+            case _:
+                # TODO: expression statement
+                raise ParseError(f"implement expression statement: {t}")
+
+    def parse_statements(self, path: str, stop_at_rbrace: bool) -> list[types.Node]:
+        body = []
+        while self.cursor < len(self.tokens):
+            if stop_at_rbrace and self.current(token.RBrace()):
+                break
+            body.append(self.parse_statement(path))
+        return body
 
     def parse_function_declaration(self, path: str) -> types.FunctionDeclaration:
         self.expect(token.Identifier("fn"))
@@ -221,46 +276,7 @@ class Parser:
         typ = self.parse_type(True)
 
         self.expect(token.LBrace())
-
-        body: list[types.Node] = []
-
-        while (
-            self.cursor < len(self.tokens)
-            and self.tokens[self.cursor] != token.RBrace()
-        ):
-            t = self.tokens[self.cursor]
-
-            match t:
-                case token.Identifier():
-                    match t.value:
-                        case "fn":
-                            body.append(
-                                self.parse_function_declaration(f"{path}.f_{name}")
-                            )
-                        case "val":
-                            body.append(self.parse_value_declaration(False))
-                        case "var":
-                            body.append(self.parse_value_declaration(True))
-                        case "return":
-                            body.append(self.parse_return())
-                        case _:
-                            print(f"Invalid keyword in function body {t.value}")
-                            sys.exit(1)
-                case token.Pound():  # TODO: hard coded to that all macro calls are treated as #llvm() macro calls
-                    self.expect(token.Pound())
-                    ident = self.expect_type(token.Identifier)
-
-                    match ident.value:
-                        case "fn":
-                            print("Macro declaration is not implemented")
-                            sys.exit(1)
-                        case _:
-                            body.append(self.parse_macro_call(ident))
-                case _:
-                    # TODO: expression statement
-                    print(f"implement expression statement: {t}")
-                    sys.exit(1)
-
+        body = self.parse_statements(f"{path}.f_{name}", stop_at_rbrace=True)
         self.expect(token.RBrace())
 
         irname = f"{path}.f_{name}_{self.type_to_str(typ, True)}"
@@ -296,7 +312,7 @@ class Parser:
         expr = self.parse_expression()
 
         return types.ValueDeclaration(
-            name, mutable, typ, expr, irname=f"v_{self.cursor}_{name}"
+            name, mutable, typ, expr, irname=f"v_{next(self.ids)}_{name}"
         )
 
     def parse_expression(self) -> types.Expression:
@@ -326,14 +342,13 @@ class Parser:
             op = self.expect_type(token.Operator).value
 
             if op not in ("-", "+"):
-                print(f"Invalid unary operator: {op}")
-                sys.exit(1)
+                raise ParseError(f"Invalid unary operator: {op}")
             operand = self.parse_unary_expression()
             return types.UnaryExpression(operand, op, operand.typ)
 
         return self.parse_primary_expression()
 
-    def parse_primary_expression(self) -> Optional[types.Expression]:
+    def parse_primary_expression(self) -> types.Expression | None:
         t = self.tokens[self.cursor]
 
         match t:
@@ -379,6 +394,10 @@ class Parser:
                 expr = self.parse_expression()
                 self.expect(token.RParen())
                 return expr
+
+            case token.Interpolated():
+                self.cursor += 1
+                return t.node
 
             case _:
                 return None

@@ -137,6 +137,10 @@ def lex(source: str) -> list[token.Token]:
                     i += 1
                 case "%":
                     tokens.append(token.Operator("%"))
+                    i += 1
+                case "$":
+                    tokens.append(token.Dollar())
+                    i += 1
                 case _:
                     print(f"Unknown character found during lexing: '{c}' at {i}")
                     break

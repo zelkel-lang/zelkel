@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -29,6 +30,16 @@ class Pound:
 @dataclass
 class LParen:
     pass
+
+
+@dataclass
+class Dollar:
+    pass
+
+
+@dataclass
+class Interpolated:
+    node: Any
 
 
 @dataclass
@@ -91,4 +102,6 @@ Token = (
     | Colon
     | Equals
     | Operator
+    | Dollar
+    | Interpolated
 )

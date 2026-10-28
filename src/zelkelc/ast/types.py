@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import sys
-from typing import Optional
+from dataclasses import dataclass
+
+from src.zelkelc.lexer import token
 
 
 @dataclass
@@ -48,12 +49,27 @@ class FunctionDeclaration:
 
 @dataclass
 class ReturnStatement:
-    expr: Optional[Expression]
+    expr: Expression | None
+
+
+@dataclass
+class MacroDefinition:
+    name: str
+    params: list[tuple[str, str]]
+    body: list[token.Token]
 
 
 @dataclass
 class MacroCall:
-    body: str
+    name: str
+    args: list[token.Token]
+
+
+@dataclass
+class InlineIR:
+    template: str
+    args: list[Expression]
+    expansion_id: int
 
 
 Node = (
@@ -61,7 +77,9 @@ Node = (
     | ValueDeclaration
     | FunctionDeclaration
     | StructDeclaration
+    | MacroDefinition
     | MacroCall
+    | InlineIR
 )
 
 

@@ -153,8 +153,11 @@ class ScopeChecker:
                         self._check_function(method, self.global_scope)
                 case types.StructDeclaration():
                     continue
+                case types.InlineIR():
+                    for arg in top_level.args:
+                        self._infer_expression_type(arg, self.global_scope)
                 case types.MacroCall():
-                    continue
+                    self._error(f"unexpanded macro call #{top_level.name}")
                 case _:
                     self._error(f"Unsupported top-level node: {type(top_level)}")
 
@@ -263,7 +266,7 @@ class ScopeChecker:
                         )
                     )
 
-                case types.MacroCall():
+                case types.MacroCall() | types.InlineIR():
                     continue
 
                 case _:
@@ -363,8 +366,9 @@ class ScopeChecker:
                         )
                     self._check_function(child, function_scope)
 
-                case types.MacroCall():
-                    continue
+                case types.InlineIR():
+                    for arg in child.args:
+                        self._infer_expression_type(arg, function_scope)
 
                 case _:
                     self._error(

@@ -1,6 +1,7 @@
 import sys
 
 from src.zelkelc.ast import types
+from src.zelkelc.expander.expander import render_llvm
 
 
 class IRTable:
@@ -37,8 +38,8 @@ class Codegen:
                     self.gen_class_declaration(node)
                 case types.FunctionDeclaration():
                     self.ir.global_functions += self.gen_function_declaration(node)
-                case types.MacroCall():
-                    self.ir.top = rf"{node.body}" + "\n" + self.ir.top
+                case types.InlineIR():
+                    self.ir.top = self.gen_inline_ir(node, is_top=True) + "\n" + self.ir.top
                 case _:
                     print(f"Invalid node found during codegen {type(node)}")
                     sys.exit(1)
@@ -63,6 +64,37 @@ class Codegen:
         self.ir.bottom += "call void @zkmain()\n"
         self.ir.bottom += "ret i32 0\n"
         self.ir.bottom += "}\n"
+        
+    def gen_inline_ir(self, node: types.InlineIR, is_top: bool) -> str:
+        vals: list[str] = []
+        tys: list[str] = []
+        prefix = ""
+        for arg in node.args:
+            reg, expr_ir = self.gen_expression(arg)
+            prefix += expr_ir
+            vals.append(f"%{reg}" if not str(reg).startswith("%") else str(reg))
+
+            typ = arg.typ
+            if (typ is types.VariableRef or typ is types.FunctionCall) and (
+                isinstance(arg, types.PrimaryExpression)
+                and getattr(arg.value, "typ", None) is not None
+            ):
+                typ = arg.value.typ
+            if typ is types.Integer64 or isinstance(typ, types.Integer64):
+                tys.append("i64")
+            elif typ is types.Float64 or isinstance(typ, types.Float64):
+                tys.append("double")
+            elif typ is types.Void or isinstance(typ, types.Void):
+                tys.append("void")
+            else:
+                tys.append("i64")
+
+        rendered = render_llvm(node.template, vals, tys, node.expansion_id)
+        if is_top:
+            return rendered
+        return (
+            prefix + ("\n" if prefix and not prefix.endswith("\n") else "") + rendered
+        )
 
     def gen_struct_declaration(self, node: types.StructDeclaration):
         members_str = ""
@@ -93,8 +125,8 @@ class Codegen:
             match child_node:
                 case types.ValueDeclaration():
                     ir += self.gen_value_declaration(child_node)
-                case types.MacroCall():
-                    ir += "\n" + rf"{child_node.body}"
+                case types.InlineIR():
+                    ir += "\n" + self.gen_inline_ir(child_node, is_top=False)
                 case types.ReturnStatement():
                     ir += self.gen_return_statement(child_node)
                 case _:
@@ -129,20 +161,20 @@ class Codegen:
                 sys.exit(1)
 
         return ir
-    
+
     def gen_return_statement(self, node: types.ReturnStatement) -> str:
         print(node)
         print(node.expr)
-        
+
         ir = ""
-        
+
         if node.expr:
             count, expr = self.gen_expression(node.expr)
             ir += expr
             ir += f"\nret {node.expr.typ.to_llvm()} %{count}"
         else:
             ir += "\nret void"
-            
+
         return ir
 
     def make_i64_op(self, sign: str) -> str:

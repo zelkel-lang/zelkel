@@ -92,16 +92,3 @@ if __name__ == "__main__":
         subprocess.run([f"./target/debug/{config['package']['name']}"], check=True)
     else:
         parser.print_help()
-
-
-# tokens = lex(source)
-# print(tokens)
-# parser = Parser(tokens, 0)
-# ast = parser.parse()
-# rich.print(ast)
-
-# Validator(ast)
-
-# codegen = Codegen(ast)
-# ir = codegen.generate()
-# print(ir)

@@ -1,3 +1,4 @@
+import itertools
 import subprocess
 from pathlib import Path
 
@@ -5,10 +6,12 @@ import rich
 
 from src.zelkelc.ast.parser import Parser
 from src.zelkelc.codegen.codegen import Codegen
+from src.zelkelc.expander.expander import Expander
 from src.zelkelc.lexer.tokenizer import lex
 from src.zelkelc.validator.validator import Validator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ids = itertools.count()
 
 
 def _resolve_project_root() -> Path:
@@ -41,11 +44,12 @@ def build_package(build_mode: str, config: dict[str, any], debug_info: bool):
     tokens = lex(source)
     if debug_info:
         print(tokens)
-    parser = Parser(tokens, 0)
+    parser = Parser(tokens, 0, ids)
     ast = parser.parse()
     if debug_info:
         rich.print(ast)
 
+    ast = Expander(ids).run(ast)
     Validator(ast)
 
     codegen = Codegen(ast)
