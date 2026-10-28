@@ -6,27 +6,12 @@ from src.zelkelbt.build import build_package
 from src.zelkelbt.config import get_config
 
 
-def print_help():
-    print("""Zelkel Build Tools (zk)
-
-Usage: zk [OPTIONS] [COMMAND]
-
-Options:
-    -V, --version           Print version info
-    --help                  Print help
-
-Commands:
-    build, b    Compile the current package
-    clean       Remove the build/ directory
-    run, r      Compile and run the current package""")
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="zk",
         description="Zelkel Build Tools (zk)",
         formatter_class=argparse.RawTextHelpFormatter,
-        add_help=False,
+        add_help=True,
     )
 
     parser.add_argument(
@@ -36,7 +21,6 @@ if __name__ == "__main__":
         version="zk 1.0.0",
         help="Print version info",
     )
-    parser.add_argument("--help", action="help", help="Print help")
 
     subparsers = parser.add_subparsers(dest="command", metavar="[COMMAND]")
 
@@ -76,7 +60,7 @@ if __name__ == "__main__":
         help="Enable debug output while running the package",
     )
 
-    parser.usage = "zk [OPTIONS] [COMMAND]"
+    parser.usage = "zk [COMMAND] [OPTIONS]"
 
     args = parser.parse_args()
 
