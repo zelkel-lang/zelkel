@@ -10,7 +10,7 @@ Lexer --> Preprocessor (unimplemented) --> Parser --> Expander --> Validator -->
 - [ ] Same-thread assync functions
 
 ## TODO
-- [] Macros
+- [ ] Macros
   - [ ] Macro definition
   - [x] Macro calling and inline llvm
 - Types:
