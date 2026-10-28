@@ -39,7 +39,7 @@ class ValueSignature:
     name: str
     irname: str
     mutable: bool
-    typ: type[types.Integer64] | type[types.String] | type[types.Void]
+    typ: type[types.Integer64] | type[types.Float64] | type[types.String] | type[types.Void]
 
 
 @dataclass
@@ -78,8 +78,8 @@ class Scope:
             values={},
         )
 
-    def resolve_variable(self, name: str) -> Optional[ValueSignature]:
-        current: Optional[Scope] = self
+    def resolve_variable(self, name: str) -> ValueSignature | None:
+        current: Scope | None = self
         while current is not None:
             if name in current.values:
                 return current.values[name]
@@ -88,8 +88,8 @@ class Scope:
 
     def resolve_function(
         self, scope_checker: ScopeChecker, name: str, args: list[types.Expression]
-    ) -> Optional[FunctionSignature]:
-        current: Optional[Scope] = self
+    ) -> FunctionSignature | None:
+        current: Scope | None = self
         while current is not None:
             overloads = current.functions.get(name)
             if overloads:
@@ -103,8 +103,8 @@ class Scope:
 
     def resolve_function_by_types(
         self, name: str, arg_types: list[types.Value]
-    ) -> Optional[FunctionSignature]:
-        current: Optional[Scope] = self
+    ) -> FunctionSignature | None:
+        current: Scope | None = self
         while current is not None:
             overloads = current.functions.get(name)
             if overloads:
@@ -116,8 +116,11 @@ class Scope:
 
     def expr_args_to_arg_types(
         self, scope_checker: ScopeChecker, args: list[types.Expression]
-    ) -> Optional[list[types.Value]]:
+    ) -> list[types.Value] | None:
         arg_types: list[types.Value] = []
+        if args is None:
+            return []
+        
         for arg in args:
             typ = scope_checker._infer_expression_type(arg, self)
             if typ is None:
@@ -397,7 +400,7 @@ class ScopeChecker:
                 expr.value.irname = signature.irname
                 expr.value.typ = signature.typ
                 return signature.typ
-            case types.PrimaryExpression(types.FunctionCall(name, args)):
+            case types.PrimaryExpression(types.FunctionCall(name, _, _, args)):
                 arg_types = active_scope.expr_args_to_arg_types(self, args)
                 if arg_types is None:
                     self._error("Could not get argument types from function call")
@@ -411,6 +414,7 @@ class ScopeChecker:
                     return None
 
                 expr.value.irname = signature.irname
+                expr.value.typ = signature.typ
                 return signature.typ
             case types.UnaryExpression(inner_expr, sign):
                 inner_type = self._infer_expression_type(inner_expr, active_scope)

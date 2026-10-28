@@ -163,6 +163,7 @@ class VariableRef:
 class FunctionCall:
     name: str
     irname: str
+    typ: Value
     args: list[Expression]
 
 

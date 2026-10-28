@@ -305,7 +305,7 @@ class Parser:
             irname = "zkmain"
 
         return types.FunctionDeclaration(
-            name=name, typ=typ, args=args, body=body, irname=irname
+            name, typ, args, body, irname
         )
 
     def parse_return(self) -> types.ReturnStatement:
@@ -389,7 +389,7 @@ class Parser:
 
                     self.expect(token.RParen())
                     return types.PrimaryExpression(
-                        types.FunctionCall(t.value, args, None), types.FunctionCall
+                        types.FunctionCall(t.value, None, None, args), types.FunctionCall
                     )
                 else:
                     return types.PrimaryExpression(

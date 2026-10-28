@@ -2,6 +2,7 @@ import sys
 
 from src.zelkelc.ast import types
 from src.zelkelc.expander.expander import render_llvm
+from src.zelkelc.ast.parser import Parser
 
 
 class IRTable:
@@ -203,6 +204,20 @@ class Codegen:
                 print(f"Cannot do operation '{sign}' on f64")
                 sys.exit(1)
 
+    def get_function_args_llvm(self, node: types.FunctionCall) -> tuple[str, str]:
+        print(node.args)
+
+        ir = ""
+        args_str = ""
+        for i, arg in enumerate(node.args):
+            if i != 0:
+                args_str += ", "
+            count, arg_ir = self.gen_expression(arg)
+            ir += arg_ir
+            args_str += f"{arg.typ.to_llvm()} %{count}"
+            
+        return ir, args_str
+
     def gen_expression(self, node: types.Expression) -> tuple[str, str]:
         ir = ""
 
@@ -251,6 +266,11 @@ class Codegen:
                         self.temp_counter += 1
                     case types.VariableRef:
                         return node.value.irname, ir
+                    case types.FunctionCall:
+                        args_ir, args_str = self.get_function_args_llvm(node.value)
+                        ir += args_ir
+                        ir += f"\n%{self.temp_counter} = call {Parser.type_to_str(node.value.typ, True)} @{node.value.irname}({args_str})"
+                        self.temp_counter += 1
                     case _:
                         print(
                             f"gen_expression() for PrimaryExpression for {type(node.value)}"
