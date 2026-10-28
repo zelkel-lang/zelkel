@@ -2,7 +2,7 @@
 Compiled object-oriented programming language
 
 ## Compilation pipeline
-Lexer --> Preprocessor (unimplemented) --> Parser --> Expander --> Validator --> Codegen
+Lexer --> Preprocessor (unimplemented) --> Parser --> Expander --> Validator --> Codegen (--> Optimizer (LLVM's opt))
 
 ## Goals
 - [ ] Self-hosted
