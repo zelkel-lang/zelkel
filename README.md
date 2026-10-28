@@ -10,8 +10,8 @@ Lexer --> Preprocessor (unimplemented) --> Parser --> Expander --> Validator -->
 - [ ] Same-thread assync functions
 
 ## TODO
-- [ ] Macros
-  - [ ] Macro definition
+- [x] Macros
+  - [x] Macro definition
   - [x] Macro calling and inline llvm
 - Types:
   - With no * or & before type it will be "dynamic", the compiler figures out if it's the pointer or the value that is being used
