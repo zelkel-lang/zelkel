@@ -1,6 +1,9 @@
 # Zelkel
 Compiled object-oriented programming language
 
+## Compilation pipeline
+Lexer -> Preprocessor (unimplemented) -> Parser -> Expander -> Validator -> Codegen
+
 ## Goals
 - [ ] Self-hosted
 - [ ] Reference-counting garbage collector
