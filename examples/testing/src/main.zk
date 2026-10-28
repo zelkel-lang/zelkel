@@ -10,12 +10,12 @@
     )
 }
 
-fn test(x: i64) -> i64 {
-    return 6 + x
+fn add(a: i64, b: i64) -> i64 {
+    return 0 + a + b
 }
 
 fn main() -> void {
-    val test: i64 = test(12)
+    val test: i64 = add(3, 5)
     #print_i64(test)
     #print_i64(test + 1)
     return

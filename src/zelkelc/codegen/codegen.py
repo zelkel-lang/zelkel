@@ -205,11 +205,10 @@ class Codegen:
                 sys.exit(1)
 
     def get_function_args_llvm(self, node: types.FunctionCall) -> tuple[str, str]:
-        print(node.args)
-
         ir = ""
         args_str = ""
         for i, arg in enumerate(node.args):
+            print(arg)
             if i != 0:
                 args_str += ", "
             count, arg_ir = self.gen_expression(arg)

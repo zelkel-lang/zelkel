@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import src.zelkelc.ast.types as types
-import src.zelkelc.validator.scope as scope
+from src.zelkelc.ast import types
+from src.zelkelc.validator import scope
 
 
 class SemanticCheckFailed(Exception):

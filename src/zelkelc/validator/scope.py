@@ -107,6 +107,7 @@ class Scope:
         current: Scope | None = self
         while current is not None:
             overloads = current.functions.get(name)
+            print(overloads)
             if overloads:
                 for candidate in overloads:
                     if list(candidate.args.values()) == arg_types:
@@ -383,7 +384,7 @@ class ScopeChecker:
 
     def _infer_expression_type(
         self, expr: types.Expression, active_scope: Scope
-    ) -> Optional[type[types.Integer64] | type[types.String] | type[types.Void]]:
+    ) -> type[types.Integer64 | types.String | types.Void] | None:
         match expr:
             case types.PrimaryExpression(types.Integer64()):
                 return types.Integer64
