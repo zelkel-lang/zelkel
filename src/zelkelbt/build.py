@@ -11,8 +11,8 @@ from src.zelkelc.lexer.tokenizer import lex
 from src.zelkelc.validator.validator import Validator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CLANG_FLAGS = ["-Wno-unused-command-line-argument", "-Wno-override-module"]
 ids = itertools.count()
-
 
 def _resolve_project_root() -> Path:
     candidates = [Path.cwd(), PROJECT_ROOT]
@@ -80,6 +80,7 @@ def build_package(build_mode: str, config: dict[str, any], debug_info: bool):
         subprocess.run(
             [
                 "clang",
+                *CLANG_FLAGS,
                 str(opt_output),
                 "-o",
                 str(project_root / "target" / "release" / package_name),
@@ -90,6 +91,7 @@ def build_package(build_mode: str, config: dict[str, any], debug_info: bool):
         subprocess.run(
             [
                 "clang",
+                *CLANG_FLAGS,
                 str(output_path),
                 "-o",
                 str(project_root / "target" / "debug" / package_name),
