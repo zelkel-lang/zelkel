@@ -1,9 +1,11 @@
 import struct
-import sys
 
 from src.zelkelc.ast import types
 from src.zelkelc.expander.expander import render_llvm
-from src.zelkelc.ast.parser import Parser
+
+
+class GeneratorError(Exception):
+    pass
 
 
 class IRTable:
@@ -41,10 +43,13 @@ class Codegen:
                 case types.FunctionDeclaration():
                     self.ir.global_functions += self.gen_function_declaration(node)
                 case types.InlineIR():
-                    self.ir.top = self.gen_inline_ir(node, is_top=True) + "\n" + self.ir.top
+                    self.ir.top = (
+                        self.gen_inline_ir(node, is_top=True) + "\n" + self.ir.top
+                    )
                 case _:
-                    print(f"Invalid node found during codegen {type(node)}")
-                    sys.exit(1)
+                    raise GeneratorError(
+                        f"Invalid node found during codegen {type(node)}"
+                    )
 
         self.gen_main_function()
 
@@ -66,7 +71,7 @@ class Codegen:
         self.ir.bottom += "call void @zkmain()\n"
         self.ir.bottom += "ret i32 0\n"
         self.ir.bottom += "}\n"
-        
+
     def gen_inline_ir(self, node: types.InlineIR, is_top: bool) -> str:
         vals: list[str] = []
         tys: list[str] = []
@@ -120,10 +125,9 @@ class Codegen:
                 case types.ReturnStatement():
                     ir += self.gen_return_statement(child_node)
                 case _:
-                    print(
+                    raise GeneratorError(
                         f"gen_function_declaration() {type(child_node)} is unimplemented"
                     )
-                    sys.exit(1)
 
         return ir + "\n}\n"
 
@@ -147,26 +151,28 @@ class Codegen:
                 else:
                     ir += f"\n%{node.irname} = fadd double {operand}, 0.0"
             case _:
-                print(f"gen_value_declaration() for {node.typ} is unimplemented")
-                sys.exit(1)
+                raise GeneratorError(
+                    f"gen_value_declaration() for {node.typ} is unimplemented"
+                )
 
         return ir
-    
+
     def gen_value_assignment(self, node: types.ValueAssignment) -> str:
         ir = ""
-        
+
         operand, expr = self.gen_expression(node.expr)
         ir += expr
-        
+
         match node.typ:
             case types.Integer64:
                 ir += f"\nstore i64 {operand}, i64* %{node.irname}, align 8"
             case types.Float64:
                 ir += f"\nstore double {operand}, double* %{node.irnmae}, align 8"
             case _:
-                print(f"gen_value_assignment() for {node.typ} is unimplemented")
-                sys.exit(1)
-        
+                raise GeneratorError(
+                    f"gen_value_assignment() for {node.typ} is unimplemented"
+                )
+
         return ir
 
     def gen_return_statement(self, node: types.ReturnStatement) -> str:
@@ -190,8 +196,7 @@ class Codegen:
             case "*":
                 return "mul"
             case _:
-                print(f"Cannot do operation '{sign}' on i64")
-                sys.exit(1)
+                raise GeneratorError(f"Cannot do operation '{sign}' on i64")
 
     def make_f64_op(self, sign: str) -> str:
         match sign:
@@ -206,8 +211,7 @@ class Codegen:
             case "%":
                 return "frem"
             case _:
-                print(f"Cannot do operation '{sign}' on f64")
-                sys.exit(1)
+                raise GeneratorError(f"Cannot do operation '{sign}' on f64")
 
     def get_function_args_llvm(self, node: types.FunctionCall) -> tuple[str, str]:
         ir = ""
@@ -229,8 +233,9 @@ class Codegen:
             return "double"
         if typ is types.Void or isinstance(typ, types.Void):
             return "void"
-        print(f"Cannot convert type {typ} to llvm ir (was the AST validated?)")
-        sys.exit(1)
+        raise GeneratorError(
+            f"Cannot convert type {typ} to llvm ir (was the AST validated?)"
+        )
 
     @staticmethod
     def llvm_double(value: float) -> str:
@@ -254,8 +259,9 @@ class Codegen:
                 elif node.typ is types.Float64:
                     inst = self.make_f64_op(node.op)
                 else:
-                    print(f"Binary '{node.op}' on unsupported type {node.typ}")
-                    sys.exit(1)
+                    raise GeneratorError(
+                        f"Binary '{node.op}' on unsupported type {node.typ}"
+                    )
 
                 tmp = self.new_temp()
                 ir += f"\n{tmp} = {inst} {self.llvm_type(node.typ)} {left}, {right}"
@@ -284,12 +290,19 @@ class Codegen:
                             tmp = self.new_temp()
                             match node.value.typ:
                                 case types.Integer64:
-                                    return tmp, f"\n{tmp} = load i64, i64* %{node.value.irname}, align 8"
+                                    return (
+                                        tmp,
+                                        f"\n{tmp} = load i64, i64* %{node.value.irname}, align 8",
+                                    )
                                 case types.Float64:
-                                    return tmp, f"\n{tmp} = load double, double* %{node.value.irname}, align 8"
+                                    return (
+                                        tmp,
+                                        f"\n{tmp} = load double, double* %{node.value.irname}, align 8",
+                                    )
                                 case _:
-                                    print(f"Type {self.value.typ} is unimplemented for mutable VariableRef")
-                                    sys.exit(1)
+                                    raise GeneratorError(
+                                        f"Type {self.value.typ} is unimplemented for mutable VariableRef"
+                                    )
                         else:
                             return f"%{node.value.irname}", ""
                     case types.FunctionCall():
@@ -302,10 +315,10 @@ class Codegen:
                         )
                         return tmp, ir
                     case _:
-                        print(
+                        raise GeneratorError(
                             f"gen_expression() for PrimaryExpression for {type(node.value)}"
                         )
-                        sys.exit(1)
             case _:
-                print(f"Invalid expression types found during codegen: {node}")
-                sys.exit(1)
+                raise GeneratorError(
+                    f"Invalid expression types found during codegen: {node}"
+                )

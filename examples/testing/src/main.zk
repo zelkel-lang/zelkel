@@ -16,9 +16,7 @@ fn add(a: i64, b: i64) -> i64 {
 
 fn main() -> void {
     var test: i64 = add(5, 5)
-    test = test + 3
-
-
+    test += 5 + 2 * 4 + (2+3 * 4+1)
 
     #print_i64(test)
     #print_i64(test + 1)

@@ -337,7 +337,7 @@ class ScopeChecker:
                     if not function_scope.values[child.name].mutable:
                         self._error(f"Variable '{child.name}' is immutable")
                         continue
-                    
+
                     expression_type = self._infer_expression_type(
                         child.expr, function_scope
                     )
@@ -483,7 +483,7 @@ class ScopeChecker:
 
                 match left_type:
                     case types.Integer64:
-                        if op not in ["+", "-", "*", "/", "%"]:
+                        if op not in ["+", "-", "*"]:
                             self._error(
                                 f"Operator '{op}' does not support {self._type_name(left_type)}"
                             )

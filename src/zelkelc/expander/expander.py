@@ -3,11 +3,11 @@ import re
 from itertools import count
 
 from src.zelkelc.ast import types
-from src.zelkelc.ast.parser import ParseError, Parser
+from src.zelkelc.ast.parser import Parser, SyntaxError
 from src.zelkelc.lexer import token
 
 
-class MacroError(Exception):
+class ExpanderError(Exception):
     pass
 
 
@@ -27,7 +27,7 @@ def render_llvm(template: str, vals: list[str], tys: list[str], eid: int) -> str
             return str(eid)
         i = int(idx) if idx else next(auto)
         if i >= len(vals):
-            raise MacroError("#llvm placeholder out of range")
+            raise ExpanderError("#llvm placeholder out of range")
         if spec == "ty":
             return tys[i]
         return vals[i]
@@ -46,7 +46,7 @@ class Expander:
         for n in nodes:
             if isinstance(n, types.MacroDefinition):
                 if n.name in self.macros:
-                    raise MacroError(f"macro #{n.name} already defined")
+                    raise ExpanderError(f"macro #{n.name} already defined")
                 self.macros[n.name] = n
             else:
                 remaining.append(n)
@@ -54,7 +54,7 @@ class Expander:
 
     def expand_nodes(self, nodes: list[types.Node], depth: int) -> list[types.Node]:
         if depth > 64:
-            raise MacroError("macro recursion limit")
+            raise ExpanderError("macro recursion limit")
         out: list[types.Node] = []
         for n in nodes:
             if isinstance(n, types.MacroCall):
@@ -78,7 +78,7 @@ class Expander:
 
         macro = self.macros.get(call.name)
         if macro is None:
-            raise MacroError(f"unknown macro #{call.name}")
+            raise ExpanderError(f"unknown macro #{call.name}")
 
         bindings = self.match(macro, call.args)
         transcribed = self.transcribe(macro.body, bindings)
@@ -86,15 +86,15 @@ class Expander:
         sub = Parser(transcribed, 0, self.ids)
         try:
             return sub.parse_statements("_macro_", stop_at_rbrace=False)
-        except ParseError as e:
-            raise MacroError(f"in expansion of #{call.name}: {e}") from e
+        except SyntaxError as e:
+            raise ExpanderError(f"in expansion of #{call.name}: {e}") from e
 
     def expand_llvm(self, call: types.MacroCall) -> types.InlineIR:
         tokens = call.args
         if not tokens:
-            raise MacroError("#llvm requires at least a template string")
+            raise ExpanderError("#llvm requires at least a template string")
         if not isinstance(tokens[0], token.String):
-            raise MacroError("#llvm first argument must be a string template")
+            raise ExpanderError("#llvm first argument must be a string template")
 
         template = tokens[0].value
         arg_exprs: list[types.Expression] = []
@@ -106,10 +106,10 @@ class Expander:
             sub = Parser(tokens, i, self.ids)
             try:
                 expr = sub.parse_expression()
-            except ParseError as e:
-                raise MacroError(f"#llvm argument parse error: {e}") from e
+            except SyntaxError as e:
+                raise ExpanderError(f"#llvm argument parse error: {e}") from e
             if expr is None:
-                raise MacroError("#llvm expected expression argument")
+                raise ExpanderError("#llvm expected expression argument")
             arg_exprs.append(expr)
             i = sub.cursor
 
@@ -125,7 +125,9 @@ class Expander:
         for name, kind in macro.params:
             if i > 0:
                 if i >= len(tokens) or not isinstance(tokens[i], token.Comma):
-                    raise MacroError(f"expected ',' between arguments to #{macro.name}")
+                    raise ExpanderError(
+                        f"expected ',' between arguments to #{macro.name}"
+                    )
                 i += 1
 
             sub = Parser(tokens, i, self.ids)
@@ -134,7 +136,7 @@ class Expander:
                     case "expr":
                         expr = sub.parse_expression()
                         if expr is None:
-                            raise ParseError("expected expression")
+                            raise SyntaxError("expected expression")
                         bindings[name] = [token.Interpolated(expr)]
 
                     case "ident":
@@ -166,15 +168,15 @@ class Expander:
                         bindings[name] = tokens[start : sub.cursor]
 
                     case _:
-                        raise MacroError(f"unknown fragment kind {kind}")
-            except ParseError as e:
-                raise MacroError(
+                        raise ExpanderError(f"unknown fragment kind {kind}")
+            except SyntaxError as e:
+                raise ExpanderError(
                     f"failed to match '{name}:{kind}' of #{macro.name}: {e}"
                 ) from e
             i = sub.cursor
 
         if i != len(tokens):
-            raise MacroError(f"unexpected tokens in call to #{macro.name}")
+            raise ExpanderError(f"unexpected tokens in call to #{macro.name}")
         return bindings
 
     def transcribe(

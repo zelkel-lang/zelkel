@@ -46,12 +46,15 @@ class FunctionDeclaration:
     body: list[Node]
     irname: str
 
+
 @dataclass
 class ValueAssignment:
     name: str
+    assigner: str
     typ: Value
     expr: Expression
     irname: str
+
 
 @dataclass
 class ReturnStatement:

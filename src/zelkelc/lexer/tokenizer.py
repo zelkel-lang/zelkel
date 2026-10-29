@@ -1,6 +1,10 @@
 from src.zelkelc.lexer import token
 
 
+class TokenError(Exception):
+    pass
+
+
 def lex(source: str) -> list[token.Token]:
     tokens: list[token.Token] = []
 
@@ -52,9 +56,8 @@ def lex(source: str) -> list[token.Token]:
                     break
                 i += 1
                 string += string_c
-            if i > len(source) or source[i] != '"':
-                print("No '\"' to close string")
-                break
+            if i >= len(source) or source[i] != '"':
+                raise TokenError("No '\"' to close string")
             i += 1
             tokens.append(token.String(string))
         elif c == "#" and i + 1 < len(source) and source[i + 1] == '"':
@@ -69,10 +72,21 @@ def lex(source: str) -> list[token.Token]:
                 string += source[i]
                 i += 1
             else:
-                print("No '\"#' to close string")
-                break
+                raise TokenError("No '\"#' to close string")
         elif c == "-" and source[i + 1] == ">":
             tokens.append(token.Arrow())
+            i += 2
+        elif c == "+" and source[i + 1] == "=":
+            tokens.append(token.Assigner("+="))
+            i += 2
+        elif c == "-" and source[i + 1] == "=":
+            tokens.append(token.Assigner("-="))
+            i += 2
+        elif c == "*" and source[i + 1] == "=":
+            tokens.append(token.Assigner("*="))
+            i += 2
+        elif c == "/" and source[i + 1] == "=":
+            tokens.append(token.Assigner("/="))
             i += 2
         elif c == "<" and source[i + 1] == "=":
             tokens.append(token.Operator("<="))
@@ -121,7 +135,7 @@ def lex(source: str) -> list[token.Token]:
                     tokens.append(token.Colon())
                     i += 1
                 case "=":
-                    tokens.append(token.Equals())
+                    tokens.append(token.Assigner("="))
                     i += 1
                 case "+":
                     tokens.append(token.Operator("+"))
@@ -142,7 +156,8 @@ def lex(source: str) -> list[token.Token]:
                     tokens.append(token.Dollar())
                     i += 1
                 case _:
-                    print(f"Unknown character found during lexing: '{c}' at {i}")
-                    break
+                    raise TokenError(
+                        f"Unknown character found during lexing: '{c}' at {i}"
+                    )
 
     return tokens

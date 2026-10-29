@@ -4,7 +4,7 @@ from src.zelkelc.ast import types
 from src.zelkelc.lexer import token
 
 
-class ParseError(Exception):
+class SyntaxError(Exception):
     pass
 
 
@@ -20,12 +20,12 @@ class Parser:
 
     def expect(self, tok: token.Token):
         if self.tokens[self.cursor] != tok:
-            raise ParseError(f"Expected {tok}, but found {self.tokens[self.cursor]}")
+            raise SyntaxError(f"Expected {tok}, but found {self.tokens[self.cursor]}")
         self.cursor += 1
 
     def expect_type(self, tok_type: token.Token) -> token.Token:
         if type(self.tokens[self.cursor]) is not tok_type:
-            raise ParseError(
+            raise SyntaxError(
                 f"Expected {tok_type}, but found {type(self.tokens[self.cursor])}"
             )
         self.cursor += 1
@@ -52,7 +52,7 @@ class Parser:
             case types.Void if is_return_type:
                 return "void"
             case _:
-                raise ParseError(f"Invalid type found in type_to_str: {typ}")
+                raise SyntaxError(f"Invalid type found in type_to_str: {typ}")
 
     def parse_type(self, is_return_type: bool) -> types.Value:
         identifier = self.expect_type(token.Identifier)
@@ -66,7 +66,7 @@ class Parser:
             case "void" if is_return_type:
                 return types.Void
             case _:
-                raise ParseError(
+                raise SyntaxError(
                     f"Invalid type found in parse_type: {identifier.value}"
                 )
 
@@ -83,11 +83,11 @@ class Parser:
                     case "class":
                         return self.parse_class_declaration(path)
                     case _:
-                        raise ParseError(f"Invalid keyword in global {t.value}")
+                        raise SyntaxError(f"Invalid keyword in global {t.value}")
             case token.Pound():
                 return self.parse_pound()
             case _:
-                raise ParseError(f"Invalid token found while parsing global {t}")
+                raise SyntaxError(f"Invalid token found while parsing global {t}")
 
     def parse_items(self) -> list[types.Node]:
         items = []
@@ -104,12 +104,12 @@ class Parser:
         elif self.current(token.LBrace()):
             open_t, _close_t = token.LBrace(), token.RBrace()
         else:
-            raise ParseError("Expected '(' or '{' to start delimited token tree")
+            raise SyntaxError("Expected '(' or '{' to start delimited token tree")
         self.expect(open_t)
         depth, start = 1, self.cursor
         while depth:
             if self.cursor >= len(self.tokens):
-                raise ParseError("unclosed delimited group")
+                raise SyntaxError("unclosed delimited group")
             t = self.tokens[self.cursor]
             if isinstance(t, (token.LParen, token.LBrace)):
                 depth += 1
@@ -138,11 +138,10 @@ class Parser:
             self.expect(token.Colon())
             kind = self.expect_type(token.Identifier).value
             if kind not in ("expr", "ident", "type", "tt"):
-                raise ParseError(f"Unknown macro fragment kind: {kind}")
+                raise SyntaxError(f"Unknown macro fragment kind: {kind}")
             params.append((pname, kind))
         self.expect(token.RParen())
 
-        # Body is a { ... } token tree, stored unparsed
         body = self.take_delimited()
         return types.MacroDefinition(name=name, params=params, body=body)
 
@@ -175,11 +174,11 @@ class Parser:
                                 self.parse_member_declaration(True, len(members))
                             )
                         case _:
-                            raise ParseError(
+                            raise SyntaxError(
                                 f"Invalid keyword in struct body {t.value}"
                             )
                 case _:
-                    raise ParseError(
+                    raise SyntaxError(
                         f"Invalid token found while parsing class declaration: {t}"
                     )
 
@@ -232,9 +231,11 @@ class Parser:
                                 self.parse_member_declaration(True, len(members))
                             )
                         case _:
-                            raise ParseError(f"Invalid keyword in class body {t.value}")
+                            raise SyntaxError(
+                                f"Invalid keyword in class body {t.value}"
+                            )
                 case _:
-                    raise ParseError(
+                    raise SyntaxError(
                         f"Invalid token found while parsing class declaration: {t}"
                     )
 
@@ -260,12 +261,12 @@ class Parser:
                         if self.tokens[self.cursor + 1]:
                             return self.parse_value_assignment()
 
-                        raise ParseError(f"Invalid keyword in function body {t.value}")
+                        raise SyntaxError(f"Invalid keyword in function body {t.value}")
             case token.Pound():
                 return self.parse_pound()
             case _:
                 # TODO: expression statement
-                raise ParseError(f"implement expression statement: {t}")
+                raise SyntaxError(f"implement expression statement: {t}")
 
     def parse_statements(self, path: str, stop_at_rbrace: bool) -> list[types.Node]:
         body = []
@@ -328,7 +329,7 @@ class Parser:
         self.expect(token.Colon())
         typ = self.parse_type(False)
 
-        self.expect(token.Equals())
+        self.expect(token.Assigner("="))
 
         expr = self.parse_expression()
 
@@ -339,12 +340,38 @@ class Parser:
     def parse_value_assignment(self) -> types.ValueAssignment:
         name = self.expect_type(token.Identifier).value
 
-        self.expect(token.Equals())
+        assigner = self.tokens[self.cursor].value
+        match assigner:
+            case "=":
+                self.expect(token.Assigner("="))
+            case "+=":
+                self.expect(token.Assigner("+="))
+            case "-=":
+                self.expect(token.Assigner("-="))
+            case "*=":
+                self.expect(token.Assigner("*="))
+            case "/=":
+                self.expect(token.Assigner("/="))
+            case _:
+                raise SyntaxError(f"Unknown assignment operator '{assigner}' found while parsing")
 
-        expr = self.parse_expression()
-
+        if assigner == "=":
+            expr = self.parse_expression()
+        else:
+            right = self.parse_expression()
+            expr = types.BinaryExpression(
+                types.PrimaryExpression(
+                    types.VariableRef(name, True, None, None),
+                    None
+                ),
+                right,
+                assigner[0],
+                right.typ,
+            )
+            
         return types.ValueAssignment(
             name,
+            assigner,
             None,
             expr,
             None,
@@ -377,7 +404,7 @@ class Parser:
             op = self.expect_type(token.Operator).value
 
             if op not in ("-", "+"):
-                raise ParseError(f"Invalid unary operator: {op}")
+                raise SyntaxError(f"Invalid unary operator: {op}")
             operand = self.parse_unary_expression()
             return types.UnaryExpression(operand, op, operand.typ)
 

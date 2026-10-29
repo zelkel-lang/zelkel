@@ -78,12 +78,12 @@ class Colon:
 
 
 @dataclass
-class Equals:
-    pass
+class Operator:
+    value: str
 
 
 @dataclass
-class Operator:
+class Assigner:
     value: str
 
 
@@ -100,8 +100,8 @@ Token = (
     | Comma
     | Arrow
     | Colon
-    | Equals
     | Operator
+    | Assigner
     | Dollar
     | Interpolated
 )

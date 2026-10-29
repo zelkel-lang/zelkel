@@ -52,7 +52,7 @@ def build_package(build_mode: str, config: dict[str, any], debug_info: bool):
     ast = Expander(ids).run(ast)
     if debug_info:
         rich.print(ast)
-    
+
     Validator(ast)
 
     codegen = Codegen(ast)
