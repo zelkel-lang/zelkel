@@ -1,0 +1,24 @@
+#llvm(
+    #"@int.fmt = private unnamed_addr constant [14 x i8] c"Integer: %ld\0A\00""#
+)
+#llvm("declare i32 @printf(ptr, ...)")
+
+#fn print_i64($x: expr) {
+    #llvm(
+        "%call.{:id} = call i32 (ptr, ...) @printf(ptr @int.fmt, {0:ty} {0})",
+        $x
+    )
+}
+
+fn add(a: i64, b: i64) -> i64 {
+    return a + b
+}
+
+fn main() -> void {
+    var test: i64 = add(5, 5)
+    test += 5 + 2 * 4 + (2+3 * 4+1)
+
+    #print_i64(test)
+    #print_i64(test + 1)
+    return
+}
