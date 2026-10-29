@@ -39,7 +39,12 @@ class ValueSignature:
     name: str
     irname: str
     mutable: bool
-    typ: type[types.Integer64] | type[types.Float64] | type[types.String] | type[types.Void]
+    typ: (
+        type[types.Integer64]
+        | type[types.Float64]
+        | type[types.String]
+        | type[types.Void]
+    )
 
 
 @dataclass
@@ -120,7 +125,7 @@ class Scope:
         arg_types: list[types.Value] = []
         if args is None:
             return []
-        
+
         for arg in args:
             typ = scope_checker._infer_expression_type(arg, self)
             if typ is None:
@@ -322,6 +327,32 @@ class ScopeChecker:
                         typ=child.typ,
                     )
 
+                case types.ValueAssignment():
+                    if child.name not in function_scope.values:
+                        self._error(
+                            f"Variable '{child.name} is undefined in function '{fn.name}'"
+                        )
+                        continue
+
+                    if not function_scope.values[child.name].mutable:
+                        self._error(f"Variable '{child.name}' is immutable")
+                        continue
+                    
+                    expression_type = self._infer_expression_type(
+                        child.expr, function_scope
+                    )
+                    if expression_type is not None and not self._same_type(
+                        expression_type, function_scope.values[child.name].typ
+                    ):
+                        self._error(
+                            f"Type mismatch for '{child.name}' in function '{fn.name}': "
+                            f"expected {self._type_name(function_scope.values[child.name].typ)}, got {self._type_name(expression_type)}"
+                        )
+
+                    child.typ = expression_type
+                    child.irname = function_scope.values[child.name].irname
+                    continue
+
                 case types.ReturnStatement():
                     has_return = True
                     if child.expr is None:
@@ -386,8 +417,6 @@ class ScopeChecker:
     ) -> type[types.Integer64 | types.String | types.Void] | None:
         typ = self._infer_expression_type_inner(expr, active_scope)
         if typ is not None and hasattr(expr, "typ"):
-            # Parser only knows placeholders here (e.g. VariableRef); store the
-            # real type so codegen never has to guess from the operands.
             expr.typ = typ
         return typ
 
@@ -407,6 +436,7 @@ class ScopeChecker:
                     self._error(f"Unknown variable '{name}'")
                     return None
 
+                expr.value.mutable = signature.mutable
                 expr.value.irname = signature.irname
                 expr.value.typ = signature.typ
                 return signature.typ

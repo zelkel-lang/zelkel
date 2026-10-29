@@ -125,7 +125,6 @@ class Parser:
             return self.parse_macro_definition()
         return self.parse_macro_call(ident)
 
-
     def parse_macro_definition(self) -> types.MacroDefinition:
         name = self.expect_type(token.Identifier).value
 
@@ -258,6 +257,9 @@ class Parser:
                     case "return":
                         return self.parse_return()
                     case _:
+                        if self.tokens[self.cursor + 1]:
+                            return self.parse_value_assignment()
+
                         raise ParseError(f"Invalid keyword in function body {t.value}")
             case token.Pound():
                 return self.parse_pound()
@@ -304,9 +306,7 @@ class Parser:
         if name == "main":
             irname = "zkmain"
 
-        return types.FunctionDeclaration(
-            name, typ, args, body, irname
-        )
+        return types.FunctionDeclaration(name, typ, args, body, irname)
 
     def parse_return(self) -> types.ReturnStatement:
         self.expect(token.Identifier("return"))
@@ -334,6 +334,20 @@ class Parser:
 
         return types.ValueDeclaration(
             name, mutable, typ, expr, irname=f"v_{next(self.ids)}_{name}"
+        )
+
+    def parse_value_assignment(self) -> types.ValueAssignment:
+        name = self.expect_type(token.Identifier).value
+
+        self.expect(token.Equals())
+
+        expr = self.parse_expression()
+
+        return types.ValueAssignment(
+            name,
+            None,
+            expr,
+            None,
         )
 
     def parse_expression(self) -> types.Expression:
@@ -389,11 +403,12 @@ class Parser:
 
                     self.expect(token.RParen())
                     return types.PrimaryExpression(
-                        types.FunctionCall(t.value, None, None, args), types.FunctionCall
+                        types.FunctionCall(t.value, None, None, args),
+                        types.FunctionCall,
                     )
                 else:
                     return types.PrimaryExpression(
-                        types.VariableRef(t.value, None, None), types.VariableRef
+                        types.VariableRef(t.value, None, None, None), types.VariableRef
                     )
 
             case token.Integer():

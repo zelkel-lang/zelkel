@@ -113,6 +113,8 @@ class Codegen:
             match child_node:
                 case types.ValueDeclaration():
                     ir += self.gen_value_declaration(child_node)
+                case types.ValueAssignment():
+                    ir += self.gen_value_assignment(child_node)
                 case types.InlineIR():
                     ir += "\n" + self.gen_inline_ir(child_node, is_top=False)
                 case types.ReturnStatement():
@@ -148,6 +150,23 @@ class Codegen:
                 print(f"gen_value_declaration() for {node.typ} is unimplemented")
                 sys.exit(1)
 
+        return ir
+    
+    def gen_value_assignment(self, node: types.ValueAssignment) -> str:
+        ir = ""
+        
+        operand, expr = self.gen_expression(node.expr)
+        ir += expr
+        
+        match node.typ:
+            case types.Integer64:
+                ir += f"\nstore i64 {operand}, i64* %{node.irname}, align 8"
+            case types.Float64:
+                ir += f"\nstore double {operand}, double* %{node.irnmae}, align 8"
+            case _:
+                print(f"gen_value_assignment() for {node.typ} is unimplemented")
+                sys.exit(1)
+        
         return ir
 
     def gen_return_statement(self, node: types.ReturnStatement) -> str:
@@ -261,7 +280,18 @@ class Codegen:
                     case types.Float64():
                         return self.llvm_double(node.value.value), ""
                     case types.VariableRef():
-                        return f"%{node.value.irname}", ""
+                        if node.value.mutable:
+                            tmp = self.new_temp()
+                            match node.value.typ:
+                                case types.Integer64:
+                                    return tmp, f"\n{tmp} = load i64, i64* %{node.value.irname}, align 8"
+                                case types.Float64:
+                                    return tmp, f"\n{tmp} = load double, double* %{node.value.irname}, align 8"
+                                case _:
+                                    print(f"Type {self.value.typ} is unimplemented for mutable VariableRef")
+                                    sys.exit(1)
+                        else:
+                            return f"%{node.value.irname}", ""
                     case types.FunctionCall():
                         args_ir, args_str = self.get_function_args_llvm(node.value)
                         tmp = self.new_temp()
