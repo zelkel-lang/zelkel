@@ -107,7 +107,6 @@ class Scope:
         current: Scope | None = self
         while current is not None:
             overloads = current.functions.get(name)
-            print(overloads)
             if overloads:
                 for candidate in overloads:
                     if list(candidate.args.values()) == arg_types:
@@ -385,6 +384,16 @@ class ScopeChecker:
     def _infer_expression_type(
         self, expr: types.Expression, active_scope: Scope
     ) -> type[types.Integer64 | types.String | types.Void] | None:
+        typ = self._infer_expression_type_inner(expr, active_scope)
+        if typ is not None and hasattr(expr, "typ"):
+            # Parser only knows placeholders here (e.g. VariableRef); store the
+            # real type so codegen never has to guess from the operands.
+            expr.typ = typ
+        return typ
+
+    def _infer_expression_type_inner(
+        self, expr: types.Expression, active_scope: Scope
+    ) -> type[types.Integer64 | types.String | types.Void] | None:
         match expr:
             case types.PrimaryExpression(types.Integer64()):
                 return types.Integer64
@@ -421,9 +430,12 @@ class ScopeChecker:
                 inner_type = self._infer_expression_type(inner_expr, active_scope)
                 if inner_type is None:
                     return None
-                if sign in ("+", "-") and inner_type is not types.Integer64:
+                if sign in ("+", "-") and inner_type not in (
+                    types.Integer64,
+                    types.Float64,
+                ):
                     self._error(
-                        f"Unary operator '{sign}' expects i64, got {self._type_name(inner_type)}"
+                        f"Unary operator '{sign}' expects i64 or f64, got {self._type_name(inner_type)}"
                     )
                     return None
                 return inner_type
@@ -441,7 +453,7 @@ class ScopeChecker:
 
                 match left_type:
                     case types.Integer64:
-                        if op not in ["+", "-", "*"]:
+                        if op not in ["+", "-", "*", "/", "%"]:
                             self._error(
                                 f"Operator '{op}' does not support {self._type_name(left_type)}"
                             )

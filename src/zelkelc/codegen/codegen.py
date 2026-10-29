@@ -1,3 +1,4 @@
+import struct
 import sys
 
 from src.zelkelc.ast import types
@@ -71,24 +72,10 @@ class Codegen:
         tys: list[str] = []
         prefix = ""
         for arg in node.args:
-            reg, expr_ir = self.gen_expression(arg)
+            operand, expr_ir = self.gen_expression(arg)
             prefix += expr_ir
-            vals.append(f"%{reg}" if not str(reg).startswith("%") else str(reg))
-
-            typ = arg.typ
-            if (typ is types.VariableRef or typ is types.FunctionCall) and (
-                isinstance(arg, types.PrimaryExpression)
-                and getattr(arg.value, "typ", None) is not None
-            ):
-                typ = arg.value.typ
-            if typ is types.Integer64 or isinstance(typ, types.Integer64):
-                tys.append("i64")
-            elif typ is types.Float64 or isinstance(typ, types.Float64):
-                tys.append("double")
-            elif typ is types.Void or isinstance(typ, types.Void):
-                tys.append("void")
-            else:
-                tys.append("i64")
+            vals.append(operand)
+            tys.append(self.llvm_type(arg.typ))
 
         rendered = render_llvm(node.template, vals, tys, node.expansion_id)
         if is_top:
@@ -141,22 +128,22 @@ class Codegen:
     def gen_value_declaration(self, node: types.ValueDeclaration) -> str:
         ir = ""
 
-        count, expr = self.gen_expression(node.expr)
+        operand, expr = self.gen_expression(node.expr)
         ir += expr
 
         match node.typ:
             case types.Integer64:
                 if node.mutable:
                     ir += f"\n%{node.irname} = alloca i64, align 8"
-                    ir += f"\nstore i64 %{count}, i64* %{node.irname}, align 8"
+                    ir += f"\nstore i64 {operand}, i64* %{node.irname}, align 8"
                 else:
-                    ir += f"\n%{node.irname} = add i64 %{count}, 0"
+                    ir += f"\n%{node.irname} = add i64 {operand}, 0"
             case types.Float64:
                 if node.mutable:
                     ir += f"\n%{node.irname} = alloca double, align 8"
-                    ir += f"\nstore double %{count}, double* %{node.irname}, align 8"
+                    ir += f"\nstore double {operand}, double* %{node.irname}, align 8"
                 else:
-                    ir += f"\n%{node.irname} = fadd double %{count}, 0.0"
+                    ir += f"\n%{node.irname} = fadd double {operand}, 0.0"
             case _:
                 print(f"gen_value_declaration() for {node.typ} is unimplemented")
                 sys.exit(1)
@@ -164,15 +151,12 @@ class Codegen:
         return ir
 
     def gen_return_statement(self, node: types.ReturnStatement) -> str:
-        print(node)
-        print(node.expr)
-
         ir = ""
 
         if node.expr:
-            count, expr = self.gen_expression(node.expr)
+            operand, expr = self.gen_expression(node.expr)
             ir += expr
-            ir += f"\nret {node.expr.typ.to_llvm()} %{count}"
+            ir += f"\nret {self.llvm_type(node.expr.typ)} {operand}"
         else:
             ir += "\nret void"
 
@@ -200,6 +184,8 @@ class Codegen:
                 return "fmul"
             case "/":
                 return "fdiv"
+            case "%":
+                return "frem"
             case _:
                 print(f"Cannot do operation '{sign}' on f64")
                 sys.exit(1)
@@ -208,68 +194,83 @@ class Codegen:
         ir = ""
         args_str = ""
         for i, arg in enumerate(node.args):
-            print(arg)
             if i != 0:
                 args_str += ", "
-            count, arg_ir = self.gen_expression(arg)
+            operand, arg_ir = self.gen_expression(arg)
             ir += arg_ir
-            args_str += f"{arg.typ.to_llvm()} %{count}"
-            
+            args_str += f"{self.llvm_type(arg.typ)} {operand}"
+
         return ir, args_str
 
+    @staticmethod
+    def llvm_type(typ) -> str:
+        if typ is types.Integer64 or isinstance(typ, types.Integer64):
+            return "i64"
+        if typ is types.Float64 or isinstance(typ, types.Float64):
+            return "double"
+        if typ is types.Void or isinstance(typ, types.Void):
+            return "void"
+        print(f"Cannot convert type {typ} to llvm ir (was the AST validated?)")
+        sys.exit(1)
+
+    @staticmethod
+    def llvm_double(value: float) -> str:
+        bits = struct.unpack("<Q", struct.pack("<d", float(value)))[0]
+        return f"0x{bits:016X}"
+
+    def new_temp(self) -> str:
+        name = f"%t{self.temp_counter}"
+        self.temp_counter += 1
+        return name
+
     def gen_expression(self, node: types.Expression) -> tuple[str, str]:
-        ir = ""
+        match node:
+            case types.BinaryExpression():
+                left, left_ir = self.gen_expression(node.left)
+                right, right_ir = self.gen_expression(node.right)
+                ir = left_ir + right_ir
 
-        match type(node):
-            case types.BinaryExpression:
-                left_irname, left = self.gen_expression(node.left)
-                right_irname, right = self.gen_expression(node.right)
+                if node.typ is types.Integer64:
+                    inst = self.make_i64_op(node.op)
+                elif node.typ is types.Float64:
+                    inst = self.make_f64_op(node.op)
+                else:
+                    print(f"Binary '{node.op}' on unsupported type {node.typ}")
+                    sys.exit(1)
 
-                ir += left + right
+                tmp = self.new_temp()
+                ir += f"\n{tmp} = {inst} {self.llvm_type(node.typ)} {left}, {right}"
+                return tmp, ir
 
-                match node.left.typ:
-                    case types.Integer64:
-                        ir += f"\n%{self.temp_counter} = {self.make_i64_op(node.op)} i64 %{left_irname}, %{right_irname}"
-                        self.temp_counter += 1
-                    case types.Float64:
-                        ir += f"\n%{self.temp_counter} = {self.make_f64_op(node.op)} double %{left_irname}, %{right_irname}"
-                        self.temp_counter += 1
-                    case types.VariableRef:
-                        match node.left.value.typ:
-                            case types.Integer64:
-                                ir += f"\n%{self.temp_counter} = {self.make_i64_op(node.op)} i64 %{left_irname}, %{right_irname}"
-                                self.temp_counter += 1
-                            case types.Float64:
-                                ir += f"\n%{self.temp_counter} = {self.make_f64_op(node.op)} double %{left_irname}, %{right_irname}"
-                                self.temp_counter += 1
-                            case _:
-                                print(
-                                    f"gen_expression() for BinaryExpression left operand variable type '{node.left.value.typ}' is unimplemented"
-                                )
-                    case _:
-                        print(
-                            f"gen_expression() for BinaryExpression for {node.left.typ}"
-                        )
-                        sys.exit(1)
-            case types.UnaryExpression:
-                print("gen_expression() for UnaryExpression unimplemented")
-                sys.exit(1)
+            case types.UnaryExpression():
+                operand, ir = self.gen_expression(node.expr)
+                if node.sign == "+":
+                    return operand, ir
 
-            case types.PrimaryExpression:
-                match type(node.value):
-                    case types.Integer64:
-                        ir += f"\n%{self.temp_counter} = add i64 {node.value.value}, 0"
-                        self.temp_counter += 1
-                    case types.Float64:
-                        ir += f"\n%{self.temp_counter} = fadd double {node.value.value}, 0.0"
-                        self.temp_counter += 1
-                    case types.VariableRef:
-                        return node.value.irname, ir
-                    case types.FunctionCall:
+                tmp = self.new_temp()
+                if node.typ is types.Float64:
+                    ir += f"\n{tmp} = fneg double {operand}"
+                else:
+                    ir += f"\n{tmp} = sub i64 0, {operand}"
+                return tmp, ir
+
+            case types.PrimaryExpression():
+                match node.value:
+                    case types.Integer64():
+                        return str(node.value.value), ""
+                    case types.Float64():
+                        return self.llvm_double(node.value.value), ""
+                    case types.VariableRef():
+                        return f"%{node.value.irname}", ""
+                    case types.FunctionCall():
                         args_ir, args_str = self.get_function_args_llvm(node.value)
-                        ir += args_ir
-                        ir += f"\n%{self.temp_counter} = call {Parser.type_to_str(node.value.typ, True)} @{node.value.irname}({args_str})"
-                        self.temp_counter += 1
+                        tmp = self.new_temp()
+                        ret_ty = self.llvm_type(node.typ)
+                        ir = (
+                            args_ir
+                            + f"\n{tmp} = call {ret_ty} @{node.value.irname}({args_str})"
+                        )
+                        return tmp, ir
                     case _:
                         print(
                             f"gen_expression() for PrimaryExpression for {type(node.value)}"
@@ -278,5 +279,3 @@ class Codegen:
             case _:
                 print(f"Invalid expression types found during codegen: {node}")
                 sys.exit(1)
-
-        return str(self.temp_counter - 1), ir
