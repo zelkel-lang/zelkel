@@ -285,9 +285,12 @@ class Parser:
         while self.cursor < len(self.tokens) and not self.current(token.RParen()):
             arg_name = self.expect_type(token.Identifier).value
 
-            self.expect(token.Colon())
-            typ = self.parse_type(False)
-            args[arg_name] = typ
+            if arg_name == "self":
+                args[arg_name] = None
+            else:
+                self.expect(token.Colon())
+                typ = self.parse_type(False)
+                args[arg_name] = typ
 
             if not self.current(token.Comma()):
                 break
@@ -295,7 +298,12 @@ class Parser:
                 self.expect(token.Comma())
 
         self.expect(token.RParen())
-
+        
+        label = None
+        if self.current(token.Colon()):
+            self.expect(token.Colon())
+            label = self.expect_type(token.Identifier)
+            
         self.expect(token.Arrow())
         typ = self.parse_type(True)
 
@@ -307,7 +315,7 @@ class Parser:
         if name == "main":
             irname = "zkmain"
 
-        return types.FunctionDeclaration(name, typ, args, body, irname)
+        return types.FunctionDeclaration(name, label, typ, args, body, irname)
 
     def parse_return(self) -> types.ReturnStatement:
         self.expect(token.Identifier("return"))
@@ -340,7 +348,7 @@ class Parser:
     def parse_value_assignment(self) -> types.ValueAssignment:
         name = self.expect_type(token.Identifier).value
 
-        assigner = self.tokens[self.cursor].value
+        assigner = self.expect_type(token.Assigner).value
         match assigner:
             case "=":
                 self.expect(token.Assigner("="))

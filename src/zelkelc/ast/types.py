@@ -41,6 +41,7 @@ class ValueDeclaration:
 @dataclass
 class FunctionDeclaration:
     name: str
+    label: str | None
     typ: Value
     args: dict[str, Value]
     body: list[Node]
@@ -120,9 +121,6 @@ Expression = BinaryExpression | UnaryExpression | PrimaryExpression
 class Integer64:
     value: int
 
-    def to_llvm() -> str:
-        return "i64"
-
     def __eq__(self, other):
         if not isinstance(other, Integer64):
             return False
@@ -132,9 +130,6 @@ class Integer64:
 @dataclass
 class Float64:
     value: int
-
-    def to_llvm() -> str:
-        return "double"
 
     def __eq__(self, other):
         if not isinstance(other, Float64):
@@ -146,15 +141,17 @@ class Float64:
 class String:
     value: str
 
-    def to_llvm() -> str:
-        print("Cannot convert String to llvm ir")
-        sys.exit(1)
-
 
 @dataclass
 class Void:
     def to_llvm() -> str:
         return "void"
+
+
+@dataclass
+class Class:
+    name: str
+    irname: str
 
 
 @dataclass
@@ -177,14 +174,4 @@ class FunctionCall:
     args: list[Expression]
 
 
-@dataclass
-class Ptr[T]:
-    pass
-
-
-@dataclass
-class Val[T]:
-    pass
-
-
-Value = Integer64 | Float64 | String | Void | VariableRef | FunctionCall
+Value = Class | Integer64 | Float64 | String | Void | VariableRef | FunctionCall

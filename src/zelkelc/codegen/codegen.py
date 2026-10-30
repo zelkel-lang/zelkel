@@ -92,14 +92,14 @@ class Codegen:
     def gen_struct_declaration(self, node: types.StructDeclaration):
         members_str = ""
         for i, m in enumerate(node.members):
-            members_str += f"{', ' if i != 0 else ''}{m.typ.to_llvm()}"
+            members_str += f"{', ' if i != 0 else ''}{self.llvm_type(m.typ)}"
 
         self.ir.structs += f"\n%{node.irname} = type " + "{ " + members_str + " }"
 
     def gen_class_declaration(self, node: types.ClassDeclaration):
         members_str = ""
         for i, m in enumerate(node.members):
-            members_str += f"{', ' if i != 0 else ''}{m.typ.to_llvm()}"
+            members_str += f"{', ' if i != 0 else ''}{self.llvm_type(m.typ)}"
 
         self.ir.structs += f"\n%{node.irname} = type " + "{ " + members_str + " }"
 
@@ -109,9 +109,9 @@ class Codegen:
     def gen_function_declaration(self, node: types.FunctionDeclaration) -> str:
         args_str = ""
         for i, (name, typ) in enumerate(node.args.items()):
-            args_str += f"{', ' if i != 0 else ''}{typ.to_llvm()} %{name}"
+            args_str += f"{', ' if i != 0 else ''}{self.llvm_type(typ)} %{name}"
 
-        ir = f"\ndefine {node.typ.to_llvm()!s} @{node.irname}({args_str}) " + "{"
+        ir = f"\ndefine {self.llvm_type(node.typ)} @{node.irname}({args_str}) " + "{"
         ir += "\nentry:"
 
         for child_node in node.body:
@@ -226,13 +226,15 @@ class Codegen:
         return ir, args_str
 
     @staticmethod
-    def llvm_type(typ) -> str:
+    def llvm_type(typ: types.Value) -> str:
         if typ is types.Integer64 or isinstance(typ, types.Integer64):
             return "i64"
         if typ is types.Float64 or isinstance(typ, types.Float64):
             return "double"
         if typ is types.Void or isinstance(typ, types.Void):
             return "void"
+        if typ is types.Class or isinstance(typ, types.Class):
+            return f"%{typ.irname}*"
         raise GeneratorError(
             f"Cannot convert type {typ} to llvm ir (was the AST validated?)"
         )

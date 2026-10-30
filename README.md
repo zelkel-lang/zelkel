@@ -26,7 +26,7 @@ Lexer --> Preprocessor (unimplemented) --> Parser --> Expander --> Validator -->
 ```
 
 ### Just a bunch of stuff
-```kotlin
+```rust
 class Parser {
   val tokens: Arr<Token>
   val cursor: Int
@@ -41,7 +41,7 @@ class Parser {
 fn main() -> i64 {
   val parser: Parser = Parser::new(etcetc...) // with hooked constructor, also puts reference counting
   
-  val parser_manually: &Parser = mem.alloc(mem.sizeof(Parser)) // will not be tracked by reference counter, the pointer address is not added to the GC's pointer track list. GC only counts addresses in it's list
+  val parser_manually: Parser = mem.alloc(mem.sizeof(Parser)) // will not be tracked by reference counter, the pointer address is not added to the GC's pointer track list. GC only counts addresses in it's list
   *parser_manually.tokens = ...
   *parser_manually.cursor = ...
 

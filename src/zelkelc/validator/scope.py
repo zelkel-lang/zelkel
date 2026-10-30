@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import src.zelkelc.ast.types as types
 from dataclasses import dataclass
-from typing import Optional
+
+from src.zelkelc.ast import types
 
 
 @dataclass
@@ -28,6 +28,7 @@ class ClassSignature:
 @dataclass
 class FunctionSignature:
     name: str
+    label: str | None
     irname: str
     static: bool
     typ: types.Value
@@ -39,12 +40,7 @@ class ValueSignature:
     name: str
     irname: str
     mutable: bool
-    typ: (
-        type[types.Integer64]
-        | type[types.Float64]
-        | type[types.String]
-        | type[types.Void]
-    )
+    typ: type[types.Integer64 | types.Float64 | types.String | types.Void]
 
 
 @dataclass
@@ -52,13 +48,13 @@ class MemberSignature:
     name: str
     irname: str
     mutable: bool
-    typ: type[types.Integer64] | type[types.String] | type[types.Void]
+    typ: type[types.Integer64 | types.String | types.Void]
     member_idx: int
 
 
 @dataclass
 class Scope:
-    parent: Optional[Scope]
+    parent: Scope | None
     classes: dict[str, ClassSignature]
     structs: dict[str, StructSignature]
     functions: dict[str, list[FunctionSignature]]
@@ -224,8 +220,12 @@ class ScopeChecker:
 
                     method_table: dict[str, list[FunctionSignature]] = {}
                     for method in methods:
+                        if "self" in method.args:
+                            method.args["self"] = types.Class(name, irname)
+
                         signature = FunctionSignature(
                             name=method.name,
+                            label=method.label,
                             irname=method.irname,
                             static=False,
                             typ=method.typ,
@@ -254,7 +254,7 @@ class ScopeChecker:
                         methods=method_table,
                     )
 
-                case types.FunctionDeclaration(name, typ, args, _, irname):
+                case types.FunctionDeclaration(name, label, typ, args, _, irname):
                     existing = self.global_scope.resolve_function_by_types(
                         name, list(args.values())
                     )
@@ -263,10 +263,11 @@ class ScopeChecker:
                             f"Function '{name}' is already defined with following signature '{existing}'"
                         )
                         continue
-
+                    
                     self.global_scope._ensure_function_overloads(name).append(
                         FunctionSignature(
                             name=name,
+                            label=label,
                             irname=irname,
                             static=True,
                             typ=typ,
